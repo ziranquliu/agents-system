@@ -1,3 +1,6 @@
+"""
+对话模型 (占位)
+"""
 from sqlalchemy import Column, String, Text, DateTime
 from sqlalchemy.sql import func
 from app.db.session import Base

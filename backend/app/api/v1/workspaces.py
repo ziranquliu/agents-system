@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.get("/")
 async def list_workspaces():
-    """工作空间列表 (占位)"""
+    """获取工作空间列表 (占位)"""
     return {"workspaces": []}
 
 

@@ -1,47 +1,53 @@
-# 鏈湴鏅鸿兘浣撶鐞嗙郴缁?(Local Agent Management System)
+# 本地多智能体管理系统 (Local Agent Management System)
 
-涓€绔欏紡鏈湴鍖栨櫤鑳戒綋绠＄悊骞冲彴 鈥斺€?鏀寔 Agent 鍒涘缓銆丼kill 缂栨帓銆丮CP 绠＄悊銆佸湪绾垮競鍦恒€佸鏅鸿兘浣撳崗浣滃強鍏ㄩ摼璺洃鎺ц繍缁淬€?
-## 椤圭洰缁撴瀯
+一站式本地化智能体管理平台 —— 支持 Agent 创建、Skill 编排、MCP 管理、在线市场、多智能体协作及全链路监控运维。
+
+## 项目结构
 
 ```
 agents-system/
-鈹溾攢鈹€ backend/         # FastAPI 鍚庣 (Python 3.11+)
-鈹溾攢鈹€ frontend/        # React 鍓嶇 (TypeScript + Vite)
-鈹溾攢鈹€ docker/          # Docker Compose 缂栨帓鏂囦欢
-鈹斺攢鈹€ docs/            # 椤圭洰鏂囨。
+├── backend/         # FastAPI 后端 (Python 3.11+)
+├── frontend/        # React 前端 (TypeScript + Vite)
+├── docker/          # Docker Compose 编排文件
+└── docs/            # 项目文档
 ```
 
-## 蹇€熷紑濮?
-### 鍓嶇疆瑕佹眰
+## 快速开始
+
+### 前置要求
 
 - Python 3.11+
 - Node.js 20+
 - Docker & Docker Compose
 - npm
 
-### 鍚姩寮€鍙戠幆澧?
+### 启动开发环境
+
 ```bash
-# 1. 鍚姩鍩虹璁炬柦鏈嶅姟 (PostgreSQL, Redis, Qdrant, MinIO)
+# 1. 启动基础设施服务 (PostgreSQL, Redis, Qdrant)
 make infra-up
 
-# 2. 瀹夎鍚庣渚濊禆骞跺惎鍔?make backend-dev
+# 2. 安装后端依赖并启动
+make backend-dev
 
-# 3. 瀹夎鍓嶇渚濊禆骞跺惎鍔?make frontend-dev
+# 3. 安装前端依赖并启动
+make frontend-dev
 
-# 4. 璁块棶
-# 鍓嶇: http://localhost:5173
-# 鍚庣: http://localhost:8000
-# API 鏂囨。: http://localhost:8000/docs
+# 4. 访问
+# 前端: http://localhost:5173
+# 后端: http://localhost:8000
+# API 文档: http://localhost:8000/docs
 ```
 
-## 鏂囨。绱㈠紩
+## 文档索引
 
-璇﹁ `../plan/` 鐩綍锛?- [鏅鸿兘浣撶鐞嗙郴缁熸瀯寤鸿鍒掍功](../plan/鏅鸿兘浣撶鐞嗙郴缁熸瀯寤鸿鍒掍功.md)
-- [鏁版嵁搴撹璁(../plan/design/database_design.md)
-- [API 鎺ュ彛瑙勮寖](../plan/design/api_spec.md)
-- [鏋舵瀯鍥剧湅鏉縘(../plan/architecture/鏋舵瀯鍥剧湅鏉?html)
+详见 `../plan/` 目录：
 
-## 璁稿彲
+- [智能体管理系统构建计划书](../plan/智能体管理系统构建计划书.md)
+- [数据库设计](../plan/design/database_design.md)
+- [API 接口规范](../plan/design/api_spec.md)
+- [架构图看板](../plan/architecture/架构图看板.html)
+
+## 许可
 
 MIT
-

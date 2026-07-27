@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.get("/")
 async def list_agents():
-    """Agent 列表 (占位)"""
+    """获取 Agent 列表 (占位)"""
     return {"agents": []}
 
 

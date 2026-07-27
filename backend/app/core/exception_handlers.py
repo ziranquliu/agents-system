@@ -1,5 +1,5 @@
 """
-统一异常处理 — 全局异常拦截和格式化错误响应
+统一异常处理 - 全局异常拦截和格式化错误响应
 """
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse

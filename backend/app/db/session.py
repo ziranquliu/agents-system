@@ -46,7 +46,7 @@ async def check_db_connection():
         async with engine.begin() as conn:
             await conn.execute(text("SELECT 1"))
     except Exception as e:
-        print(f"数据库连接失败: {e}")
+        print(f"Database connection failed: {e}")
         raise
 
 

@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.get("/")
 async def list_conversations():
-    """对话列表 (占位)"""
+    """获取对话列表 (占位)"""
     return {"conversations": []}
 
 

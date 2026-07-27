@@ -22,7 +22,7 @@ class Agent(Base):
     name = Column(String(100), nullable=False)
     description = Column(Text)
     status = Column(Enum(AgentStatus), default=AgentStatus.DRAFT)
-    model_config = Column(Text)  # JSON 存储模型配置模板引用
+    model_config = Column(Text)  # JSON model config template reference
     system_prompt = Column(Text)
     workspace_id = Column(String(36), nullable=False)
     created_by = Column(String(36), nullable=False)

@@ -1,5 +1,5 @@
 """
-应用配置管理 — 基于 pydantic-settings 的环境变量加载
+应用配置管理 - 基于 pydantic-settings 的环境变量加载
 """
 from pydantic_settings import BaseSettings
 from typing import List
@@ -22,14 +22,10 @@ class Settings(BaseSettings):
     # Qdrant
     QDRANT_URL: str = "http://localhost:6333"
 
-    # MinIO (对象存储) — 当前开发环境使用本地文件系统替代
-    # 生产环境部署时取消注释并配置
+    # MinIO (生产部署时取消注释)
     # MINIO_ENDPOINT: str = "localhost:9000"
     # MINIO_ACCESS_KEY: str = "agent_admin"
     # MINIO_SECRET_KEY: str = "agent_dev_2024"
-    # MINIO_BUCKET_LOGS: str = "agent-logs"
-    # MINIO_BUCKET_BACKUPS: str = "backups"
-    # MINIO_BUCKET_PLUGINS: str = "plugin-storage"
     STORAGE_BACKEND: str = "local"  # local | minio | s3
     STORAGE_LOCAL_PATH: str = "../data/storage"
 

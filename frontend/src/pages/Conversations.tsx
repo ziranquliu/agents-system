@@ -1,3 +1,3 @@
 export default function Conversations() {
-  return <div className="space-y-6"><h1 className="text-2xl font-bold">对话管理</h1><p className="text-gray-500">对话列表待实现</p></div>
+  return <div className="space-y-6"><h1 className="text-2xl font-bold">{'\u5BF9\u8BDD\u7BA1\u7406'}</h1><p className="text-gray-500">{'\u5217\u8868\u5F85\u5B9E\u73B0'}</p></div>
 }

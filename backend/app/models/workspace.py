@@ -1,3 +1,6 @@
+"""
+工作空间模型 (占位)
+"""
 from sqlalchemy import Column, String, DateTime
 from sqlalchemy.sql import func
 from app.db.session import Base

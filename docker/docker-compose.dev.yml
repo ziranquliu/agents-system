@@ -1,10 +1,9 @@
-# 本地智能体管理系统 - 开发环境编排
-# 启动: docker compose -f docker-compose.dev.yml up -d
-# 停止: docker compose -f docker-compose.dev.yml down
+# Local Agent Management System - Development Environment
+# Start: docker compose -f docker-compose.dev.yml up -d
+# Stop:  docker compose -f docker-compose.dev.yml down
 #
-# 注意: MinIO 在当前 CPU (不支持 x86-64-v2) 上无法运行，
-#       开发阶段使用本地文件系统替代对象存储。
-#       数据目录映射到 ../data/ 下，方便查看和管理。
+# Note: MinIO requires x86-64-v2 CPU instructions not supported on this machine.
+#       Using local filesystem for storage during development.
 
 services:
   postgres:

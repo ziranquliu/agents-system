@@ -1,3 +1,6 @@
+"""
+技能与 MCP 模型 (占位)
+"""
 from sqlalchemy import Column, String, Text, DateTime, Boolean
 from sqlalchemy.sql import func
 from app.db.session import Base
@@ -25,5 +28,5 @@ class MCPServer(Base):
     url = Column(String(500), nullable=False)
     protocol = Column(String(20), default="sse")  # sse | stdio
     status = Column(String(20), default="active")  # active | inactive | error
-    config = Column(Text)  # JSON 配置
+    config = Column(Text)  # JSON config
     created_at = Column(DateTime(timezone=True), server_default=func.now())
