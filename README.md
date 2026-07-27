@@ -4,7 +4,7 @@
 ## 椤圭洰缁撴瀯
 
 ```
-src/
+agents-system/
 鈹溾攢鈹€ backend/         # FastAPI 鍚庣 (Python 3.11+)
 鈹溾攢鈹€ frontend/        # React 鍓嶇 (TypeScript + Vite)
 鈹溾攢鈹€ docker/          # Docker Compose 缂栨帓鏂囦欢

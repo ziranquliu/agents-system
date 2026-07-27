@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # MINIO_BUCKET_BACKUPS: str = "backups"
     # MINIO_BUCKET_PLUGINS: str = "plugin-storage"
     STORAGE_BACKEND: str = "local"  # local | minio | s3
-    STORAGE_LOCAL_PATH: str = "./data/storage"
+    STORAGE_LOCAL_PATH: str = "../data/storage"
 
     # Auth
     SECRET_KEY: str = "change-this-in-production"
