@@ -57,3 +57,8 @@ Desktop.ini
 data/
 uploads/
 temp/
+
+# Runtime files
+*.err
+server.log
+server.err

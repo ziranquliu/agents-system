@@ -1,6 +1,7 @@
+﻿"""
+数据库会话管理 - 异步 SQLAlchemy 引擎与会话工厂
 """
-数据库会话管理 — 异步 SQLAlchemy 引擎与会话工厂
-"""
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
@@ -43,9 +44,9 @@ async def check_db_connection():
     """启动时检查数据库连接"""
     try:
         async with engine.begin() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
     except Exception as e:
-        print(f"⚠️ 数据库连接失败: {e}")
+        print(f"数据库连接失败: {e}")
         raise
 
 

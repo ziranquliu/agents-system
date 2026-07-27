@@ -22,13 +22,16 @@ class Settings(BaseSettings):
     # Qdrant
     QDRANT_URL: str = "http://localhost:6333"
 
-    # MinIO
-    MINIO_ENDPOINT: str = "localhost:9000"
-    MINIO_ACCESS_KEY: str = "agent_admin"
-    MINIO_SECRET_KEY: str = "agent_dev_2024"
-    MINIO_BUCKET_LOGS: str = "agent-logs"
-    MINIO_BUCKET_BACKUPS: str = "backups"
-    MINIO_BUCKET_PLUGINS: str = "plugin-storage"
+    # MinIO (对象存储) — 当前开发环境使用本地文件系统替代
+    # 生产环境部署时取消注释并配置
+    # MINIO_ENDPOINT: str = "localhost:9000"
+    # MINIO_ACCESS_KEY: str = "agent_admin"
+    # MINIO_SECRET_KEY: str = "agent_dev_2024"
+    # MINIO_BUCKET_LOGS: str = "agent-logs"
+    # MINIO_BUCKET_BACKUPS: str = "backups"
+    # MINIO_BUCKET_PLUGINS: str = "plugin-storage"
+    STORAGE_BACKEND: str = "local"  # local | minio | s3
+    STORAGE_LOCAL_PATH: str = "./data/storage"
 
     # Auth
     SECRET_KEY: str = "change-this-in-production"

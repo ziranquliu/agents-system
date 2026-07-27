@@ -1,5 +1,5 @@
-"""
-本地智能体管理系统 — FastAPI 应用入口
+﻿"""
+本地智能体管理系统 - FastAPI 应用入口
 """
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -15,13 +15,17 @@ from app.core.exception_handlers import register_exception_handlers
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """应用生命周期管理"""
-    # 启动时: 检查数据库连接、加载配置
-    from app.db.session import check_db_connection
-    await check_db_connection()
+    try:
+        from app.db.session import check_db_connection
+        await check_db_connection()
+        print(f"Server started: {settings.PROJECT_NAME} v{settings.PROJECT_VERSION}")
+    except Exception as e:
+        print(f"Startup error: {e}")
+        raise
     yield
-    # 关闭时: 清理资源
     from app.db.session import close_db_connections
     await close_db_connections()
+    print("Server shutdown complete")
 
 
 app = FastAPI(

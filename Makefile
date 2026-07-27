@@ -1,4 +1,4 @@
-.PHONY: help infra-up infra-down backend-dev backend-install frontend-dev frontend-install lint test clean
+﻿.PHONY: help infra-up infra-down backend-dev backend-install frontend-dev frontend-install lint test clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -19,17 +19,17 @@ backend-test: ## Run backend tests
 	cd backend && .venv\Scripts\activate && pytest tests/ -v
 
 frontend-install: ## Install frontend dependencies
-	cd frontend && pnpm install
+	cd frontend && npm install
 
 frontend-dev: ## Start frontend dev server
-	cd frontend && pnpm dev
+	cd frontend && npm run dev
 
 frontend-build: ## Build frontend for production
-	cd frontend && pnpm build
+	cd frontend && npm run build
 
 lint: ## Run all linters
 	cd backend && .venv\Scripts\activate && ruff check .
-	cd frontend && pnpm lint
+	cd frontend && npm run lint
 
 test: backend-test frontend-build ## Run all tests
 
@@ -39,3 +39,4 @@ clean: ## Clean temporary files
 	rm -rf frontend/dist
 	rm -rf **/__pycache__
 	rm -rf **/.pytest_cache
+
