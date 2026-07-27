@@ -1,4 +1,4 @@
-﻿# 鏈湴鏅鸿兘浣撶鐞嗙郴缁?(Local Agent Management System)
+# 鏈湴鏅鸿兘浣撶鐞嗙郴缁?(Local Agent Management System)
 
 涓€绔欏紡鏈湴鍖栨櫤鑳戒綋绠＄悊骞冲彴 鈥斺€?鏀寔 Agent 鍒涘缓銆丼kill 缂栨帓銆丮CP 绠＄悊銆佸湪绾垮競鍦恒€佸鏅鸿兘浣撳崗浣滃強鍏ㄩ摼璺洃鎺ц繍缁淬€?
 ## 椤圭洰缁撴瀯

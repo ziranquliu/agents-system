@@ -1,4 +1,4 @@
-﻿"""
+"""
 数据库会话管理 - 异步 SQLAlchemy 引擎与会话工厂
 """
 from sqlalchemy import text

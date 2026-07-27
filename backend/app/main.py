@@ -1,4 +1,4 @@
-﻿"""
+"""
 本地智能体管理系统 - FastAPI 应用入口
 """
 from contextlib import asynccontextmanager
