@@ -1,25 +1,18 @@
 import client from './client'
 
-// ----- MCP Server -----
+// ----- MCP Server (aligned with backend schemas/mcp.py) -----
 
 export interface MCPServerInfo {
   id: string
   name: string
-  url: string
-  protocol: string           // sse | stdio | websocket
-  status: string             // active | inactive | error
+  /** 服务端点 URL（后端 DB 字段为 url，API 响应字段为 endpoint） */
+  endpoint: string
+  protocol: string           // sse | stdio | streamable-http
+  status: string             // online | offline | error
+  health_status: string      // healthy | unhealthy | unknown
   version: string | null
   description: string | null
-  auth_type: string | null   // none | api_key | bearer | basic
-  auth_config: string | null // JSON
-  health_check_url: string | null
-  last_health_check: string | null
-  health_status: string      // healthy | unhealthy | unknown
-  config: string | null      // JSON
-  workspace_id: string | null
-  created_by: string | null
   created_at: string
-  updated_at: string | null
 }
 
 export interface MCPServerListResponse {
@@ -31,24 +24,20 @@ export interface MCPServerListResponse {
 
 export interface MCPServerCreatePayload {
   name: string
-  url: string
+  endpoint: string
   protocol?: string
-  version?: string | null
+  api_key?: string | null
   description?: string | null
-  auth_type?: string | null
-  auth_config?: string | null
-  health_check_url?: string | null
+  config?: Record<string, unknown> | null
 }
 
 export interface MCPServerUpdatePayload {
   name?: string
-  url?: string
+  endpoint?: string
   protocol?: string
-  version?: string | null
+  api_key?: string | null
   description?: string | null
-  auth_type?: string | null
-  auth_config?: string | null
-  health_check_url?: string | null
+  config?: Record<string, unknown> | null
 }
 
 /** 获取 MCP 服务列表 */
@@ -57,6 +46,7 @@ export async function listMCPServers(params?: {
   page_size?: number
   search?: string
   status?: string
+  protocol?: string
 }) {
   const { data } = await client.get<MCPServerListResponse>('/mcp/', { params })
   return data

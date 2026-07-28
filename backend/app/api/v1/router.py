@@ -1,8 +1,6 @@
-"""
-API v1 路由聚合
-"""
+"""API v1 路由聚合"""
 from fastapi import APIRouter
-from app.api.v1 import auth, agents, models, chat
+from app.api.v1 import auth, agents, models, chat, conversations, skills, workspaces, mcp_servers
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -10,3 +8,7 @@ api_router.include_router(auth.router, prefix="/auth", tags=["认证"])
 api_router.include_router(agents.router, prefix="/agents", tags=["Agent管理"])
 api_router.include_router(models.router, prefix="/models", tags=["模型配置"])
 api_router.include_router(chat.router, prefix="/chat", tags=["对话补全"])
+api_router.include_router(skills.router, prefix="/skills", tags=["Skill管理"])
+api_router.include_router(mcp_servers.router, prefix="/mcp-servers", tags=["MCP Server管理"])
+api_router.include_router(conversations.router, prefix="/conversations", tags=["对话历史"])
+api_router.include_router(workspaces.router, prefix="/workspaces", tags=["工作区管理"])

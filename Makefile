@@ -69,12 +69,15 @@ migration-history: ## 查看迁移历史
 migration-downgrade: ## 回滚一级迁移
 	cd backend && alembic downgrade -1
 
+seed: ## 填充种子数据
+	cd backend && python scripts/seed_data.py
+
 # ============================================================
 # 质量保障
 # ============================================================
 
 lint: ## 运行 Python 代码检查
-	cd backend && flake8 app/ tests/ --max-line-length=120 --exclude=alembic
+	cd backend && ruff check app/ tests/ scripts/
 
 test: backend-test ## 运行全部测试
 

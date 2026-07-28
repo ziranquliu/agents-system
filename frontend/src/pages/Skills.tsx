@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSkillStore } from '../stores/skillStore'
 import type { SkillCreatePayload, SkillUpdatePayload } from '../api/skills'
+import { Loading, Empty, ErrorBlock, Pagination } from '../components/ui'
 
 const typeOptions = [
   { value: '', label: '全部类型' },
@@ -31,7 +32,7 @@ export default function Skills() {
     setShowModal(true)
   }
 
-  const openEdit = (s: typeof items[0]) => {
+  const openEdit = (s: (typeof items)[0]) => {
     setEditing(s.id)
     setForm({ name: s.name, version: s.version, description: s.description, type: s.type || 'skill', category: s.category || '', entry_point: s.entry_point, enabled: s.enabled })
     setFormError('')
@@ -60,7 +61,6 @@ export default function Skills() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div><h1 className="text-2xl font-bold text-gray-900">Skill 管理</h1><p className="text-gray-500 mt-1">管理和配置 Agent 技能</p></div>
         <button onClick={openCreate} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
@@ -68,7 +68,6 @@ export default function Skills() {
         </button>
       </div>
 
-      {/* 筛选 */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex flex-wrap gap-4 items-center">
           <div className="flex-1 min-w-[200px]">
@@ -83,18 +82,15 @@ export default function Skills() {
         </div>
       </div>
 
-      {error && <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg border border-red-100">{error}</div>}
+      {error && <ErrorBlock message={error} onRetry={() => fetch()} />}
 
-      {/* 表格 */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {loading && items.length === 0 ? (
-          <div className="p-12 text-center text-gray-400">加载中...</div>
+          <Loading fullPage text="加载技能列表..." />
         ) : items.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="text-4xl mb-3">🔧</div>
-            <p className="text-gray-400">暂无 Skill</p>
-            <button onClick={openCreate} className="mt-3 text-blue-600 hover:text-blue-700 text-sm">创建第一个 Skill</button>
-          </div>
+          <Empty icon="🔧" title="暂无 Skill" description="还没有创建任何技能" action={
+            <button onClick={openCreate} className="text-blue-600 hover:text-blue-700 text-sm font-medium">创建第一个 Skill</button>
+          } />
         ) : (
           <table className="w-full">
             <thead>
@@ -117,9 +113,7 @@ export default function Skills() {
                     {s.description && <div className="text-xs text-gray-400 truncate max-w-[160px]">{s.description}</div>}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">v{s.version}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600">{s.type || '-'}</span>
-                  </td>
+                  <td className="px-4 py-3"><span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600">{s.type || '-'}</span></td>
                   <td className="px-4 py-3 text-sm text-gray-600">{s.category || '-'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{s.source === 'marketplace' ? '📦 市场' : '💻 本地'}</td>
                   <td className="px-4 py-3 text-center">
@@ -131,8 +125,8 @@ export default function Skills() {
                   <td className="px-4 py-3 text-sm text-gray-600 text-center">{s.installed_count}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => openEdit(s)} className="px-3 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded-md transition-colors">编辑</button>
-                      <button onClick={() => handleDelete(s.id, s.name)} className="px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded-md transition-colors">删除</button>
+                      <button onClick={() => openEdit(s)} className="px-3 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded-md">编辑</button>
+                      <button onClick={() => handleDelete(s.id, s.name)} className="px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded-md">删除</button>
                     </div>
                   </td>
                 </tr>
@@ -141,59 +135,46 @@ export default function Skills() {
           </table>
         )}
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50">
-            <span className="text-sm text-gray-500">共 {total} 条，第 {page}/{totalPages} 页</span>
-            <div className="flex gap-2">
-              <button onClick={() => setPage(page - 1)} disabled={page <= 1} className="px-3 py-1 text-sm border border-gray-200 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed">上一页</button>
-              <button onClick={() => setPage(page + 1)} disabled={page >= totalPages} className="px-3 py-1 text-sm border border-gray-200 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed">下一页</button>
-            </div>
+        {totalPages > 1 && !loading && (
+          <div className="border-t border-gray-100 px-4 py-3 bg-gray-50/50">
+            <Pagination current={page} total={totalPages} totalItems={total} pageSize={pageSize} onChange={setPage} />
           </div>
         )}
       </div>
 
-      {/* 创建/编辑弹窗 */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setShowModal(false)}>
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-gray-900 mb-4">{editing ? '编辑 Skill' : '创建 Skill'}</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {formError && <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg border border-red-100">{formError}</div>}
+              {formError && <ErrorBlock message={formError} />}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">名称 *</label>
-                  <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" required />
+                  <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" required />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">版本</label>
-                  <input type="text" value={form.version || '1.0.0'} onChange={(e) => setForm({ ...form, version: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                  <input type="text" value={form.version || '1.0.0'} onChange={(e) => setForm({ ...form, version: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">类型</label>
-                  <select value={form.type || 'skill'} onChange={(e) => setForm({ ...form, type: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
-                    <option value="skill">技能</option>
-                    <option value="tool">工具</option>
-                    <option value="plugin">插件</option>
+                  <select value={form.type || 'skill'} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                    <option value="skill">技能</option><option value="tool">工具</option><option value="plugin">插件</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">分类</label>
-                  <input type="text" value={form.category || ''} onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="analysis / search / code" />
+                  <input type="text" value={form.category || ''} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="analysis / search / code" />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">描述</label>
-                <textarea value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none" rows={2} />
+                <textarea value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none" rows={2} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">入口点</label>
-                <input type="text" value={form.entry_point || ''} onChange={(e) => setForm({ ...form, entry_point: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="如 src/tools/search.py" />
+                <input type="text" value={form.entry_point || ''} onChange={(e) => setForm({ ...form, entry_point: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="如 src/tools/search.py" />
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">取消</button>

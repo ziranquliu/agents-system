@@ -18,6 +18,19 @@ interface WorkspaceState {
   setPage: (p: number) => void
 }
 
+/**
+ * 兼容后端两种响应格式：
+ * 1. 标准分页: { items: [], total, page, page_size }
+ * 2. 后端占位: { workspaces: [] }
+ */
+function normalizeListResponse(data: any): { items: any[]; total: number; page: number; page_size: number } {
+  if (data.items) {
+    return { items: data.items, total: data.total ?? data.items.length, page: data.page ?? 1, page_size: data.page_size ?? data.items.length }
+  }
+  const arr = data.workspaces ?? data.data ?? []
+  return { items: arr, total: arr.length, page: 1, page_size: arr.length || 20 }
+}
+
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   items: [],
   total: 0,
@@ -35,9 +48,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       const qs = opts?.search ?? search
       if (qs) params.search = qs
       const res = await api.listWorkspaces(params)
-      set({ items: res.items, total: res.total, page: params.page as number, pageSize: params.page_size as number, loading: false })
+      const { items, total: t, page: p, page_size: ps } = normalizeListResponse(res)
+      set({ items, total: t, page: p, pageSize: ps, loading: false })
     } catch (e: any) {
-      set({ loading: false, error: e?.response?.data?.detail || e?.message || '获取列表失败' })
+      set({ loading: false, error: e?.response?.data?.detail || e?.message || '获取工作空间列表失败' })
     }
   },
 
