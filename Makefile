@@ -1,42 +1,91 @@
-﻿.PHONY: help infra-up infra-down backend-dev backend-install frontend-dev frontend-install lint test clean
+.PHONY: help infra-up infra-down infra-logs backend-dev backend-install backend-test \
+        frontend-dev frontend-install frontend-build migrate lint test clean psql redis-cli shell
 
-help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+help: ## 显示帮助信息
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+	awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-infra-up: ## Start infrastructure services (PostgreSQL, Redis, Qdrant, MinIO)
+# ============================================================
+# 基础设施 (Docker Compose)
+# ============================================================
+
+infra-up: ## 启动基础设施 (PostgreSQL + Redis + Qdrant)
 	docker compose -f docker/docker-compose.dev.yml up -d
 
-infra-down: ## Stop infrastructure services
+infra-down: ## 停止基础设施
 	docker compose -f docker/docker-compose.dev.yml down
 
-backend-install: ## Install backend dependencies
-	cd backend && python -m venv .venv && .venv\Scripts\activate && pip install -r requirements.txt
+infra-logs: ## 查看基础设施日志
+	docker compose -f docker/docker-compose.dev.yml logs -f
 
-backend-dev: ## Start backend dev server
-	cd backend && .venv\Scripts\activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+psql: ## 进入 PostgreSQL 命令行
+	docker compose -f docker/docker-compose.dev.yml exec agent-postgres psql -U agent -d agent_system
 
-backend-test: ## Run backend tests
-	cd backend && .venv\Scripts\activate && pytest tests/ -v
+redis-cli: ## 进入 Redis 命令行
+	docker compose -f docker/docker-compose.dev.yml exec agent-redis redis-cli
 
-frontend-install: ## Install frontend dependencies
+# ============================================================
+# 后端
+# ============================================================
+
+backend-install: ## 安装后端依赖
+	pip install -r backend/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+backend-dev: ## 启动后端开发服务器 (热重载)
+	cd backend && python run_server.py
+
+backend-test: ## 运行后端测试
+	cd backend && python -m pytest tests/ -v --tb=short
+
+backend-shell: ## 进入后端 Python 交互环境
+	cd backend && python -c "import asyncio; from app.db.session import get_db; print('可用: get_db, 在 ipython 中运行')"
+
+# ============================================================
+# 前端
+# ============================================================
+
+frontend-install: ## 安装前端依赖
 	cd frontend && npm install
 
-frontend-dev: ## Start frontend dev server
+frontend-dev: ## 启动前端开发服务器
 	cd frontend && npm run dev
 
-frontend-build: ## Build frontend for production
+frontend-build: ## 构建前端生产版本
 	cd frontend && npm run build
 
-lint: ## Run all linters
-	cd backend && .venv\Scripts\activate && ruff check .
-	cd frontend && npm run lint
+# ============================================================
+# 数据库迁移
+# ============================================================
 
-test: backend-test frontend-build ## Run all tests
+migrate: ## 执行数据库迁移
+	cd backend && alembic upgrade head
 
-clean: ## Clean temporary files
-	rm -rf backend/.venv
-	rm -rf frontend/node_modules
-	rm -rf frontend/dist
-	rm -rf **/__pycache__
-	rm -rf **/.pytest_cache
+migration-new: ## 生成新的数据库迁移 (用法: make migration-new msg="描述")
+	cd backend && alembic revision --autogenerate -m "$(msg)"
 
+migration-history: ## 查看迁移历史
+	cd backend && alembic history
+
+migration-downgrade: ## 回滚一级迁移
+	cd backend && alembic downgrade -1
+
+# ============================================================
+# 质量保障
+# ============================================================
+
+lint: ## 运行 Python 代码检查
+	cd backend && flake8 app/ tests/ --max-line-length=120 --exclude=alembic
+
+test: backend-test ## 运行全部测试
+
+# ============================================================
+# 工具
+# ============================================================
+
+clean: ## 清理临时文件
+	find . -type f -name "*.pyc" -delete
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	rm -rf .mypy_cache/ .coverage htmlcov/
+
+.DEFAULT_GOAL := help

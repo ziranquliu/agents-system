@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.core.config import settings
 from app.models.user import User, OperationLog
 from app.schemas.auth import UserCreate, UserLogin, UserResponse, TokenResponse
 from app.services.auth_service import (
@@ -17,6 +18,7 @@ from app.services.auth_service import (
     get_current_user,
     authenticate_user,
 )
+from app.core.security import validate_password, PasswordPolicyError
 
 router = APIRouter()
 
@@ -24,6 +26,12 @@ router = APIRouter()
 @router.post("/register", response_model=TokenResponse, status_code=201)
 async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
     """用户注册"""
+    # 校验密码强度
+    try:
+        validate_password(data.password)
+    except PasswordPolicyError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
     # 检查用户名是否已存在
     result = await db.execute(select(User).where(User.username == data.username))
     if result.scalar_one_or_none():
@@ -70,6 +78,15 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
     """用户登录"""
     user = await authenticate_user(db, data.username, data.password)
     if not user:
+        # 记录失败登录
+        log = OperationLog(
+            user_id="unknown",
+            action="login_failed",
+            resource_type="user",
+            detail=f"Failed login attempt for: {data.username}",
+        )
+        db.add(log)
+        await db.flush()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",

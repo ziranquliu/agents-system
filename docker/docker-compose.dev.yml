@@ -1,18 +1,14 @@
-# Local Agent Management System - Development Environment
-# Start: docker compose -f docker-compose.dev.yml up -d
-# Stop:  docker compose -f docker-compose.dev.yml down
-#
-# Note: MinIO requires x86-64-v2 CPU instructions not supported on this machine.
-#       Using local filesystem for storage during development.
-
 services:
-  postgres:
+  # ============================================================
+  # PostgreSQL 17 - 主数据库
+  # ============================================================
+  agent-postgres:
     image: postgres:17-alpine
     container_name: agent-postgres
     environment:
-      POSTGRES_DB: agent_system
       POSTGRES_USER: agent
-      POSTGRES_PASSWORD: agent_dev_2024
+      POSTGRES_PASSWORD: agent_pass_2024
+      POSTGRES_DB: agent_system
     ports:
       - "5432:5432"
     volumes:
@@ -20,24 +16,33 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agent -d agent_system"]
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 5
+    networks:
+      - agent-network
 
-  redis:
+  # ============================================================
+  # Redis 7 - 缓存 / 会话 / 任务队列
+  # ============================================================
+  agent-redis:
     image: redis:7-alpine
     container_name: agent-redis
     ports:
       - "6379:6379"
     volumes:
       - ../data/redis:/data
-    command: redis-server --appendonly yes --requirepass agent_dev_2024
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "agent_dev_2024", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - agent-network
 
-  qdrant:
+  # ============================================================
+  # Qdrant - 向量数据库 (语义搜索 / 记忆存储)
+  # ============================================================
+  agent-qdrant:
     image: qdrant/qdrant:latest
     container_name: agent-qdrant
     ports:
@@ -45,3 +50,34 @@ services:
       - "6334:6334"
     volumes:
       - ../data/qdrant:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - agent-network
+
+  # ============================================================
+  # pgAdmin - 数据库管理面板 (开发用)
+  # ============================================================
+  agent-pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: agent-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@agents.local
+      PGADMIN_DEFAULT_PASSWORD: admin_2024
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - ../data/pgadmin:/var/lib/pgadmin
+    depends_on:
+      agent-postgres:
+        condition: service_healthy
+    networks:
+      - agent-network
+
+networks:
+  agent-network:
+    driver: bridge
