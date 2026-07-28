@@ -1,0 +1,105 @@
+%% 自动化运维 + 备份恢复架构图（4.22 + 4.23）
+%% Auto Scaling、日志采集、定时维护、异常自愈、全量+增量+事件备份、加密+校验+恢复
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef ops fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef backup fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef infra fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef log fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef panel fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    %% ===== 自动部署 =====
+    subgraph DEPLOY["自动部署"]
+        D1[YAML 规格描述<br/>CPU·内存·Agent·Skill·MCP]:::ops
+        D2[声明式 API<br/>POST /api/v1/deploy]:::ops
+        D3[依赖自动解析<br/>自动安装依赖组件]:::ops
+        D4[部署验证<br/>健康检查通过→上线]:::ops
+    end
+
+    %% ===== Auto Scaling =====
+    subgraph SCALING["Auto Scaling"]
+        S1[扩缩容指标<br/>QPS·CPU·内存·队列长度]:::ops
+        S2[扩容策略<br/>指标超阈值→增加实例]:::ops
+        S3[缩容策略<br/>指标低→减少实例·冷却期]:::ops
+        S4[最小最大实例<br/>保证基准·峰时弹性]:::ops
+        S5[渐变扩缩<br/>每次 ±1·间隔 ≥5 分钟]:::ops
+    end
+
+    %% ===== 日志采集 =====
+    subgraph LOG["日志采集"]
+        L1[多源日志<br/>Agent·Skill·MCP·系统]:::log
+        L2[日志采集栈<br/>Filebeat / Fluentd]:::log
+        L3[日志处理栈<br/>Logstash 解析·过滤]:::log
+        L4[日志存储栈<br/>Elasticsearch / Loki]:::log
+        L5[日志检索<br/>Kibana / Grafana]:::log
+    end
+
+    %% ===== 定时维护 =====
+    subgraph MAINT["定时维护"]
+        M1[日志清理<br/>过期日志压缩删除]:::ops
+        M2[缓存清理<br/>过期 Key 清理·碎片整理]:::ops
+        M3[慢查询优化<br/>分析·索引优化·报表]:::ops
+        M4[空闲 Agent 回收<br/>释放资源·按需重建]:::ops
+    end
+
+    %% ===== 异常自愈 =====
+    subgraph HEAL["异常自愈"]
+        H1[异常检测<br/>错误率·时延·连接断裂]:::ops
+        H2[自愈策略库<br/>重启·回滚·重建·切备用]:::ops
+        H3[自愈执行<br/>自动触发·日志记录]:::ops
+        H4[升级人类<br/>自愈失败→标记人工介入]:::ops
+    end
+
+    %% ===== 运维报告 =====
+    subgraph REPORT["运维报告"]
+        R1[扩缩容记录<br/>次数·时间·副本数]:::panel
+        R2[日志统计<br/>采集量·错误分布·慢查询]:::panel
+        R3[自愈记录<br/>次数·类型·成功率]:::panel
+        R4[维护记录<br/>执行项·耗时·结果]:::panel
+    end
+
+    %% ===== 备份恢复 =====
+    subgraph BACKUP["备份恢复"]
+        B1[全量备份<br/>每日·完整快照]:::backup
+        B2[增量备份<br/>每 6 小时·变更数据]:::backup
+        B3[事件触发备份<br/>关键变更前·配置更新]:::backup
+        B4[AES-256 加密<br/>备份文件加密]:::backup
+        B5[SHA-256 校验<br/>完整性验证]:::backup
+        B6[异地备份<br/>异地数据冗余]:::backup
+    end
+
+    %% ===== 恢复机制 =====
+    subgraph RESTORE["恢复机制"]
+        RS1[一键恢复<br/>按时间点·最新可用]:::backup
+        RS2[部分恢复<br/>指定组件恢复]:::backup
+        RS3[恢复验证<br/>校验和·一致性检查]:::backup
+        RS4[恢复演练<br/>季度演练·报告]:::backup
+    end
+
+    %% ===== 外部 =====
+    AGENT["Agent 引擎"]:::panel
+
+    %% ===== 连接关系 =====
+    DEPLOY -->|"部署"| AGENT
+    SCALING -->|"弹性"| AGENT
+    SCALING -.->|"指标"| DEPLOY
+
+    LOG -.->|"采集"| AGENT
+    LOG -.->|"采集"| DEPLOY
+    LOG -.->|"采集"| SCALING
+
+    MAINT -->|"执行"| LOG
+    MAINT -->|"执行"| AGENT
+
+    HEAL -->|"恢复"| AGENT
+    HEAL -.->|"触发"| SCALING
+
+    DEPLOY & SCALING & LOG & MAINT & HEAL -->|"数据"| REPORT
+
+    BACKUP -->|"备份"| AGENT
+    BACKUP -->|"存储"| RS1
+    RS1 -->|"恢复"| AGENT
+    RS2 -->|"恢复"| AGENT
+    RS3 -.->|"验证"| BACKUP
+    RS4 -.->|"演练"| BACKUP

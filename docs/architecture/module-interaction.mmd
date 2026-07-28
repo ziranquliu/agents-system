@@ -1,0 +1,126 @@
+%% 核心模块交互图（v1.6）
+%% 新增：批量 Skill 安装 + Skill 跨 Agent 复用 + 多选会话导出 + MCP 批量安装与跨 Agent 同步
+
+graph LR
+    %% ===== 样式定义 =====
+    classDef agent fill:#6366f1,stroke:#818cf8,stroke-width:3px,color:#fff
+    classDef skill fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef mcp fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef kb fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef wf fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef mem fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef market fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef scanner fill:#f97316,stroke:#fb923c,stroke-width:2px,color:#fff
+    classDef update fill:#a855f7,stroke:#c084fc,stroke-width:2px,color:#fff
+    classDef v14 fill:#06b6d4,stroke:#22d3ee,stroke-width:2px,color:#fff
+    classDef v15 fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef v16 fill:#a3e635,stroke:#bef264,stroke-width:2px,color:#000
+    classDef ext fill:#475569,stroke:#64748b,stroke-width:1px,color:#cbd5e1
+
+    %% ===== 核心模块（原有） =====
+    AGENT["Agent 引擎"]:::agent
+    SKILL["Skill 系统"]:::skill
+    MCP["MCP 网关"]:::mcp
+    KB["知识库引擎"]:::kb
+    WF["工作流引擎"]:::wf
+    MEM["记忆管理"]:::mem
+
+    %% ===== 市场 =====
+    AGENT_MKT["智能体在线市场"]:::market
+    MODEL_MKT["模型在线市场"]:::market
+
+    %% ===== v1.3 =====
+    SCANNER["本地组件扫描器"]:::scanner
+    UPDATER["统一更新检测中心"]:::update
+
+    %% ===== v1.4 =====
+    COLLAB["多智能体协作引擎"]:::v14
+    SKILL_OPT["Skill 优化引擎"]:::v14
+    MCP_OPT["MCP 优化引擎"]:::v14
+    SESSION["会话管理器"]:::v14
+    TOKEN["Token 优化器"]:::v14
+    OTEL["OTel 可观测性"]:::v14
+
+    %% ===== v1.5 新增模块 =====
+    DASHBOARD["统一监控看板<br/>总览·实时·P50/P95/P99·告警"]:::v15
+    OPS["自动化运维<br/>Auto Scaling·日志·维护·自愈"]:::v15
+    BACKUP["备份恢复服务<br/>全量+增量+事件·AES-256·异地"]:::v15
+    HEALTH["健康监控<br/>4级检查·多维评分·红黄绿面板"]:::v15
+    AUDIT["操作审计<br/>四维审计·JSON diff·哈希链·SIEM"]:::v15
+    MEMORY["三层记忆管理<br/>短期·长期·共享·脱敏·分析"]:::v15
+
+    %% ===== v1.6 新增模块 =====
+    SKILL_SHARING["Skill 批量安装与跨 Agent 复用<br/>直接引用·复制·模板·多Agent分配"]:::v16
+    MCP_SHARING["MCP 批量安装与跨 Agent 同步<br/>直接引用·复制配置·模板化·变更通知"]:::v16
+
+    %% ===== 外部 =====
+    USER["用户/管理员"]:::ext
+    LLM["大语言模型"]:::ext
+    MCP_SRV["MCP Servers"]:::ext
+    SKILL_REPO["Skill 仓库"]:::ext
+    EXT["导出文件"]:::ext
+
+    %% ===== 原有交互（v1.0~v1.4） =====
+    USER -->|创建/配置| AGENT
+    AGENT -->|加载 Skill| SKILL; AGENT -->|调用工具| MCP
+    AGENT -->|检索知识| KB; AGENT -->|执行流程| WF
+    AGENT -->|读写记忆| MEM; AGENT -->|模型推理| LLM
+    SKILL -->|安装/更新| SKILL_REPO; SKILL -.->|注册工具| AGENT
+    MCP -->|发现·调用| MCP_SRV; MCP -.->|暴露工具| AGENT
+    KB -.->|RAG| AGENT; WF -.->|编排| AGENT; MEM -.->|上下文本| AGENT
+    USER -->|浏览/安装| AGENT_MKT; USER -->|浏览/配置| MODEL_MKT
+    AGENT_MKT -->|下载| AGENT; AGENT_MKT -->|校验| SKILL; AGENT_MKT -->|绑定| MODEL_MKT
+    MODEL_MKT -->|注册| LLM; MODEL_MKT -->|路由| AGENT
+    SCANNER -->|扫描| AGENT & SKILL & MCP; SCANNER -->|事件| UPDATER; SCANNER -->|告警| USER
+    UPDATER -->|查询| AGENT_MKT & MODEL_MKT; UPDATER -->|预检| SKILL; UPDATER -->|执行| AGENT & SKILL & MCP
+    COLLAB -->|协调| AGENT; COLLAB -->|分解| WF; COLLAB -->|黑板| MEM
+    SKILL_OPT -->|缓存/DAG| SKILL & AGENT; MCP_OPT -->|池/合并| MCP & MCP_SRV
+    SESSION -->|生命周期| AGENT & MEM; TOKEN -->|缓存/级联| AGENT & LLM
+    OTEL -->|追踪| AGENT & SKILL & MCP & COLLAB & SKILL_OPT & MCP_OPT & SESSION & TOKEN
+
+    %% ===== v1.5 新交互 =====
+    DASHBOARD -->|"拉取指标·P50/P95/P99"| AGENT & SKILL & MCP & SCANNER & COLLAB & SESSION & TOKEN & HEALTH
+    DASHBOARD -->|"展示监控面板"| USER
+    DASHBOARD -->|"告警推送"| USER
+
+    OPS -->|"Auto Scaling"| AGENT
+    OPS -->|"日志采集 (Filebeat/Fluentd)"| AGENT & SKILL & MCP & DASHBOARD
+    OPS -->|"定时维护·自愈"| AGENT & SKILL & MCP
+    OPS -->|"运维报告"| USER
+
+    BACKUP -->|"全量/增量/事件备份"| MEM & KB & SKILL & AGENT
+    BACKUP -->|"AES-256 加密·SHA-256 校验"| USER
+    BACKUP -->|"一键/部分恢复"| MEM & KB
+    BACKUP -->|"异地存储"| LLM
+
+    HEALTH -->|"L1 存活检查"| AGENT & SKILL & MCP
+    HEALTH -->|"L2 就绪检查"| AGENT & SKILL & MCP
+    HEALTH -->|"L3 能力检查"| AGENT & SKILL & MCP
+    HEALTH -->|"L4 端到端检查"| AGENT & LLM
+    HEALTH -->|"红黄绿健康面板"| USER
+
+    AUDIT -->|"记录用户操作"| USER
+    AUDIT -->|"记录 Agent 操作"| AGENT
+    AUDIT -->|"记录系统变更"| SKILL & MCP
+    AUDIT -->|"JSON diff·哈希链"| DASHBOARD
+    AUDIT -->|"SIEM 导出"| BACKUP
+
+    MEMORY -->|"短期记忆 (Redis)"| AGENT
+    MEMORY -->|"长期记忆 (向量化)"| KB
+    MEMORY -->|"共享记忆 (PostgreSQL)"| COLLAB
+    MEMORY -->|"脱敏&GDPR"| USER
+    MEMORY -->|"记忆分析·词云"| DASHBOARD
+
+    %% ===== v1.6 新交互 =====
+    AGENT_MKT -->|"批量 Skill 安装"| SKILL_SHARING
+    SKILL_SHARING -->|"直接引用/复制/模板"| AGENT
+    SKILL_SHARING -.->|"变更通知"| SKILL
+    SKILL_SHARING -->|"共享范围: 私有/团队/全局"| USER
+
+    AGENT_MKT -->|"批量 MCP 安装"| MCP_SHARING
+    MCP_SHARING -->|"直接引用/复制配置/模板化"| MCP
+    MCP_SHARING -.->|"变更通知"| MCP_SRV
+    MCP_SHARING -->|"共享范围: 私有/团队/全局"| USER
+
+    SESSION -->|"多选会话导出"| USER
+    SESSION -->|"导出格式: MD/JSON/PDF/CSV"| EXT

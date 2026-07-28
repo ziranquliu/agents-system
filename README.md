@@ -41,12 +41,12 @@ make frontend-dev
 
 ## 文档索引
 
-详见 `../plan/` 目录：
+详见 `docs/` 目录：
 
-- [智能体管理系统构建计划书](../plan/智能体管理系统构建计划书.md)
-- [数据库设计](../plan/design/database_design.md)
-- [API 接口规范](../plan/design/api_spec.md)
-- [架构图看板](../plan/architecture/架构图看板.html)
+- [智能体管理系统构建计划书](docs/智能体管理系统构建计划书.md)
+- [数据库设计](docs/design/database_design.md)
+- [API 接口规范](docs/design/api_spec.md)
+- [架构图看板](docs/architecture/架构图看板.html)
 
 ## 许可
 

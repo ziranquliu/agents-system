@@ -1,0 +1,118 @@
+%% 统一更新检测中心架构图（4.11）
+%% 检测引擎、兼容性预检、更新策略、执行更新、回滚、报告
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef engine fill:#a855f7,stroke:#c084fc,stroke-width:2px,color:#fff
+    classDef compatibility fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef strategy fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef execute fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef rollback fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef report fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef target fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef market fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+    classDef ui fill:#64748b,stroke:#94a3b8,stroke-width:1px,color:#e2e8f0
+
+    %% ===== 检测引擎 =====
+    subgraph ENGINE["检测引擎 — 定时版本对比"]
+        E1[定时任务<br/>检测周期：24 小时]:::engine
+        E2[Agent 版本对比<br/>本地 vs 市场最新模板]:::engine
+        E3[Skill 版本对比<br/>本地 vs 市场 + 兼容性矩阵]:::engine
+        E4[MCP 版本对比<br/>本地 vs 市场 + 协议兼容性]:::engine
+        E5[系统核心版本<br/>自身升级检测]:::engine
+    end
+
+    %% ===== 对比源 =====
+    LOCAL["本地组件版本库<br/>已安装版本记录"]:::target
+    MARKET["在线市场版本库<br/>最新版本+变更日志"]:::market
+
+    %% ===== 兼容性预检矩阵 =====
+    subgraph CHECK["兼容性预检矩阵"]
+        C1[版本冲突检查<br/>依赖关系是否被破坏]:::compatibility
+        C2[依赖断裂检查<br/>影响下游组件]:::compatibility
+        C3[API 兼容性检查<br/>输入/输出 Schema 变更]:::compatibility
+        C4[权限声明检查<br/>新增权限需求]:::compatibility
+        C5[文件完整性检查<br/>数字签名验证]:::compatibility
+        C6[总评生成<br/>通过/警告/阻塞]:::compatibility
+    end
+
+    %% ===== 更新策略 =====
+    subgraph STRATEGY["更新策略"]
+        ST1[自动更新<br/>PATCH 版本·无需通知]:::strategy
+        ST2[通知后更新<br/>MINOR/MAJOR·用户确认]:::strategy
+        ST3[批量更新<br/>全选安全项·一键批量]:::strategy
+        ST4[忽略版本<br/>加入忽略列表]:::strategy
+    end
+
+    %% ===== 更新执行 =====
+    subgraph EXEC["更新执行流程"]
+        EX1[创建更新前快照<br/>备份当前版本文件和配置]:::execute
+        EX2[下载新版本包<br/>校验完整性]:::execute
+        EX3[安装新版本<br/>覆盖/迁移]:::execute
+        EX4[更新数据库记录<br/>版本记录]:::execute
+        EX5[发布更新事件<br/>ComponentUpdated]:::execute
+    end
+
+    %% ===== 更新后验证 =====
+    subgraph VERIFY["更新后验证"]
+        V1[Agent: 测试对话]:::execute
+        V2[Skill: 运行测试用例]:::execute
+        V3[MCP: 连接测试]:::execute
+    end
+
+    %% ===== 回滚机制 =====
+    subgraph ROLLBACK["回滚机制"]
+        RB1[自动回滚<br/>验证失败→恢复快照]:::rollback
+        RB2[手动回滚<br/>用户触发→选择版本]:::rollback
+        RB3[快照保留期<br/>保留 90 天]:::rollback
+    end
+
+    %% ===== 更新报告 =====
+    subgraph REPORT["更新报告"]
+        R1[更新概览<br/>时间·组件·版本变更]:::report
+        R2[变更摘要<br/>Changelog]:::report
+        R3[兼容性结果<br/>检查项明细]:::report
+        R4[验证结果<br/>通过/失败]:::report
+        R5[回滚记录<br/>原因·时间]:::report
+    end
+
+    %% ===== 更新中心页面 =====
+    subgraph UI["更新管理界面"]
+        U1[概览统计<br/>待更新·安全·需确认·阻塞]:::ui
+        U2[待更新列表<br/>按组件类型分组]:::ui
+        U3[单组件详情<br/>Diff·Changelog·预检报告]:::ui
+        U4[批量操作<br/>全选安全更新]:::ui
+        U5[更新历史<br/>结果·回滚状态]:::ui
+    end
+
+    %% ===== 用户 =====
+    USER["用户/管理员"]:::target
+
+    %% ===== 连接关系 =====
+    LOCAL -->|"本地版本"| E2
+    LOCAL -->|"本地版本"| E3
+    LOCAL -->|"本地版本"| E4
+    LOCAL -->|"本地版本"| E5
+    MARKET -->|"最新版本"| E2
+    MARKET -->|"最新版本"| E3
+    MARKET -->|"最新版本"| E4
+    MARKET -->|"最新版本"| E5
+
+    E2 -->|"发现新版本"| CHECK
+    E3 -->|"发现新版本"| CHECK
+    E4 -->|"发现新版本"| CHECK
+    E5 -->|"发现新版本"| CHECK
+
+    CHECK -->|"预检结果"| STRATEGY
+    STRATEGY -->|"通知"| USER
+    USER -->|"选择更新"| EXEC
+
+    EXEC -->|"安装完成"| VERIFY
+    VERIFY -->|"全部通过"| R1
+    VERIFY -->|"验证失败"| ROLLBACK
+    ROLLBACK -->|"回滚完成"| R1
+
+    R1 -->|"生成"| REPORT
+    REPORT -->|"展示"| UI
+    UI -->|"交互"| USER

@@ -1,0 +1,128 @@
+%% Skill/MCP/Agent/Model 市场交互流程图（v1.2）
+%% 扩展：智能体安装流程 + 模型配置流程
+%% 用户浏览市场 → 选择 → 一键安装 → 配置引导 → 启用使用
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef user fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef local fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef server fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef market fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef phase fill:#0f172a,stroke:none,color:#94a3b8,font-size:11px
+    classDef step fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    %% ===== 阶段1：浏览与搜索 =====
+    PHASE1["阶段1: 浏览与搜索"]:::phase
+
+    U1["用户打开市场页面"]:::user
+    LC1["本地管理端请求首页"]:::local
+    LS1["本地服务端 GET /api/market/featured"]:::server
+    MS1["市场服务端返回推荐列表"]:::market
+
+    U1 -->|操作| LC1
+    LC1 -->|调用| LS1
+    LS1 -->|HTTP| MS1
+    MS1 -->|响应| LS1
+    LS1 -->|渲染| LC1
+    LC1 -->|展示| U1
+
+    U1_S["用户搜索/筛选"]:::user
+    LC1_S["本地管理端发送搜索请求"]:::local
+    LS1_S["本地服务端 GET /api/market/search"]:::server
+    MS1_S["市场服务端返回搜索结果"]:::market
+
+    U1_S -->|操作| LC1_S
+    LC1_S -->|调用| LS1_S
+    LS1_S -->|HTTP| MS1_S
+    MS1_S -->|响应| LS1_S
+    LS1_S -->|渲染| LC1_S
+    LC1_S -->|展示| U1_S
+
+    %% ===== 阶段2-3：Skill/MCP 安装（原有） =====
+    PHASE2["阶段2-3: Skill/MCP 安装流程"]:::phase
+
+    U2["用户选择 Skill/MCP 安装"]:::user
+    LC2["本地管理端 POST /api/install"]:::local
+    LS2["本地服务端下载·验证·注册"]:::server
+    MS2["市场服务端返回安装包"]:::market
+
+    U2 -->|一键安装| LC2
+    LC2 -->|调用| LS2
+    LS2 -->|HTTP| MS2
+    MS2 -->|返回资源| LS2
+    LS2 -->|完成| LC2
+    LC2 -->|安装成功| U2
+
+    %% ===== 新增：智能体安装流程 =====
+    PHASE3["阶段4: 智能体在线市场 — 模板安装流程"]:::phase
+
+    U3["用户浏览智能体市场"]:::user
+    U3_1["用户选择模板（例：编程开发助手）"]:::user
+    LC3["本地管理端获取模板详情"]:::local
+    LS3["本地服务端 GET /api/market/agent-templates"]:::server
+    MS3["市场服务端返回模板信息"]:::market
+    U3_2["用户点击安装"]:::user
+    LC3_1["本地管理端加载配置面板"]:::local
+    U3_3["用户填写配置<br/>名称·模型·Skill·知识库·Prompt"]:::user
+    LC3_2["本地管理端提交配置"]:::local
+    LS3_1["本地服务端生成 Agent 实例"]:::server
+    LS3_2["本地服务端部署运行"]:::server
+    U3_DONE["安装完成 ✓<br/>Agent 出现在「我的 Agent」"]:::user
+
+    U3 -->|浏览| U3_1
+    U3_1 -->|查看详情| LC3
+    LC3 -->|调用| LS3
+    LS3 -->|HTTP| MS3
+    MS3 -->|返回模板信息| LS3
+    LS3 -->|展示| LC3
+    LC3 -->|显示详情页| U3_1
+    U3_2 -->|一键安装| LC3_1
+    LC3_1 -->|展示配置表单| U3_3
+    U3_3 -->|提交| LC3_2
+    LC3_2 -->|POST /api/agent/create| LS3_1
+    LS3_1 -->|生成实例| LS3_2
+    LS3_2 -->|部署完成| U3_DONE
+
+    %% ===== 新增：模型配置流程 =====
+    PHASE4["阶段5: 模型在线市场 — 配置接入流程"]:::phase
+
+    U4["用户浏览模型市场"]:::user
+    U4_1["用户选择模型"]:::user
+    LC4["本地管理端加载配置表单"]:::local
+
+    %% 本地模型分支
+    U4_LOCAL["[本地模型] 填写地址<br/>选择部署方式"]:::user
+    LC4_LOCAL["本地管理端测试连接"]:::local
+    LS4_LOCAL["本地服务端验证模型可达"]:::server
+    U4_LOCAL_OK["本地模型接入成功 ✓"]:::user
+
+    %% 云端模型分支
+    U4_CLOUD["[云端 API] 填写 API Key<br/>选择模型版本"]:::user
+    LC4_CLOUD["本地管理端测试连接"]:::local
+    LS4_CLOUD["本地服务端验证 API 可用"]:::server
+    U4_CLOUD_OK["云端模型接入成功 ✓"]:::user
+
+    %% 路由配置
+    U4_ROUTE["[可选] 设置路由规则<br/>优先级·故障转移"]:::user
+    U4_BIND["[可选] 绑定到 Agent"]:::user
+    U4_DONE["配置完成 ✓<br/>模型出现在「已接入」列表"]:::user
+
+    U4 -->|浏览| U4_1
+    U4_1 -->|接入| LC4
+    LC4 -->|展示配置| U4_LOCAL
+    LC4 -->|展示配置| U4_CLOUD
+
+    U4_LOCAL -->|测试连接| LC4_LOCAL
+    LC4_LOCAL -->|调用| LS4_LOCAL
+    LS4_LOCAL -->|连接成功| U4_LOCAL_OK
+
+    U4_CLOUD -->|测试连接| LC4_CLOUD
+    LC4_CLOUD -->|调用| LS4_CLOUD
+    LS4_CLOUD -->|API 可用| U4_CLOUD_OK
+
+    U4_LOCAL_OK -->|下一步| U4_ROUTE
+    U4_CLOUD_OK -->|下一步| U4_ROUTE
+
+    U4_ROUTE -->|可选| U4_BIND
+    U4_BIND -->|确认| U4_DONE
+    U4_ROUTE -->|跳过| U4_DONE

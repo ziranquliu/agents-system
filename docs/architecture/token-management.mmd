@@ -1,0 +1,67 @@
+%% Token 使用管理架构图（4.16）
+%% Token 统计监控（实时/历史/模型/用户维度）、优化策略、成本控制
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef monitor fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef optimize fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef cost fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+    classDef output fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+
+    %% ===== Token 统计监控 =====
+    subgraph MONITOR["Token 统计监控"]
+        M1[实时消耗<br/>Token/s·今日累计]:::monitor
+        M2[历史趋势<br/>日/周/月·按模型·按用户]:::monitor
+        M3[模型维度<br/>GPT-4o·Claude·本地模型]:::monitor
+        M4[用户维度<br/>管理员·普通用户·各 Agent]:::monitor
+    end
+
+    %% ===== 优化策略 =====
+    subgraph OPTIMIZE["优化策略"]
+        O1[Prompt 压缩<br/>去冗余·合并历史·保留关键]:::optimize
+        O2[Semantic Cache<br/>语义匹配·缓存复用·TTL 老化]:::optimize
+        O3[内容裁剪<br/>滑动窗口·重要性评分·摘要替换]:::optimize
+        O4[模型级联<br/>小模型先试→大模型兜底]:::optimize
+        O5[预算控制<br/>软上限·硬上限·透明降级]:::optimize
+    end
+
+    %% ===== 成本控制 =====
+    subgraph COST["成本控制"]
+        C1[预算告警<br/>阈值触发·控制台+邮件]:::cost
+        C2[用量限制<br/>每日限额·超出停止]:::cost
+        C3[降级策略<br/>超预算→切到低成本模型]:::cost
+        C4[成本分摊<br/>按模型·按用户·按 Agent]:::cost
+    end
+
+    %% ===== 输出 =====
+    subgraph OUTPUT["输出"]
+        O7[Token 消耗报表<br/>Excel/CSV 导出]:::output
+        O8[成本分析报告<br/>趋势·预测·优化建议]:::output
+        O9[告警记录<br/>触发时间·动作·恢复]:::output
+    end
+
+    %% ===== 外部 =====
+    USER["用户/管理员"]:::sub
+    AGENT["Agent 引擎"]:::sub
+    LLM["大语言模型"]:::sub
+
+    %% ===== 连接关系 =====
+    AGENT -->|"调用模型消耗 Token"| MONITOR
+    MONITOR --> M1 & M2 & M3 & M4
+
+    M1 & M2 & M3 & M4 -->|"触发"| COST
+    COST -->|"超限→告警"| C1
+    COST -->|"超限→限制"| C2
+    COST -->|"触发降级"| C3
+    COST -->|"分摊统计"| C4
+
+    AGENT -->|"优化 Token 消耗"| OPTIMIZE
+    OPTIMIZE --> O1 & O2 & O3 & O4 & O5
+    O1 & O2 & O3 -.->|"减少 Token"| LLM
+    O4 -->|"小模型先试"| LLM
+    O5 -.->|"限流"| USER
+
+    M1 & M2 & M3 & M4 -->|"数据"| OUTPUT
+    C4 -->|"数据"| OUTPUT
+    OUTPUT -->|"展示"| USER

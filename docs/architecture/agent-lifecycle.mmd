@@ -1,0 +1,61 @@
+%% Agent 生命周期流程图
+%% 创建 → 配置 → 部署 → 运行 → 监控 → 停用 → 归档
+%% 转换为 graph TB 以确保 Mermaid 11.16.0 兼容性
+
+graph TB
+    classDef created fill:#6366f1,stroke:#818cf8,color:#fff
+    classDef config fill:#3b82f6,stroke:#60a5fa,color:#fff
+    classDef deploy fill:#8b5cf6,stroke:#a78bfa,color:#fff
+    classDef running fill:#10b981,stroke:#34d399,color:#fff
+    classDef monitor fill:#f59e0b,stroke:#fbbf24,color:#fff
+    classDef stopped fill:#ef4444,stroke:#f87171,color:#fff
+    classDef archive fill:#475569,stroke:#64748b,color:#fff
+    classDef inner fill:#1e293b,stroke:#475569,color:#e2e8f0
+
+    START(( )) --> 已创建_sub
+
+    subgraph 已创建_sub["已创建"]
+        创建_1[分配唯一ID]:::inner --> 创建_2[设置基础元数据]:::inner
+    end
+
+    已创建_sub -->|填写配置信息| 配置中_sub
+    已创建_sub -->|直接废弃| 已归档_sub
+
+    subgraph 配置中_sub["配置中"]
+        配置_1[选择模型]:::inner --> 配置_2[绑定Skill列表]:::inner --> 配置_3[配置MCP接入]:::inner --> 配置_4[设置系统提示词]:::inner --> 配置_5[配置记忆策略]:::inner
+    end
+
+    配置中_sub -->|配置完成·保存| 已部署_sub
+    配置中_sub -->|取消配置·回退| 已创建_sub
+
+    subgraph 已部署_sub["已部署"]
+        部署_1[验证依赖项]:::inner --> 部署_2[分配资源配额]:::inner --> 部署_3[注册到调度器]:::inner
+    end
+
+    已部署_sub -->|启动Agent| 运行中_sub
+    已部署_sub -->|需要修改配置| 配置中_sub
+
+    subgraph 运行中_sub["运行中"]
+        运行_1[处理任务]:::inner --> 运行_2[调用Skill]:::inner --> 运行_3[调用MCP工具]:::inner --> 运行_4[生成响应]:::inner
+        运行_4 -->|循环监听| 运行_1
+    end
+
+    运行中_sub -->|触发监控条件| 监控中_sub
+    运行中_sub -->|手动停止| 已停用_node
+
+    subgraph 监控中_sub["监控中"]
+        监控_1[健康检查]:::inner --> 监控_2[性能采样]:::inner --> 监控_3[异常检测]:::inner --> 监控_4[自动恢复尝试]:::inner
+    end
+
+    监控中_sub -->|恢复正常| 运行中_sub
+    监控中_sub -->|恢复失败·达最大重试| 已停用_node
+    监控中_sub -->|需调整配置| 配置中_sub
+
+    已停用_node[已停用]:::stopped -->|重新启用| 运行中_sub
+    已停用_node -->|确认不再使用| 已归档_sub
+
+    subgraph 已归档_sub["已归档"]
+        归档_1[数据备份]:::inner --> 归档_2[资源释放]:::inner --> 归档_3[记录归档日志]:::inner
+    end
+
+    已归档_sub --> END(( ))

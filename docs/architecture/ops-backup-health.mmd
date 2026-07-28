@@ -1,0 +1,86 @@
+%% 自动化运维 + 备份恢复 + 健康监控架构图（4.22 + 4.23 + 4.24）
+%% 自动部署、Auto Scaling、日志管理、备份恢复、四级健康检查、异常自愈
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef ops fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef backup fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef health fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef infra fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef panel fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    %% ===== 自动部署 =====
+    subgraph DEPLOY["自动部署"]
+        D1[YAML 模板<br/>CPU·内存·Agent·Skill·MCP]:::ops
+        D2[声明式 API<br/>POST /api/v1/deploy]:::ops
+        D3[依赖解析<br/>自动安装·配置注入]:::ops
+        D4[上线验证<br/>健康检查通过→上线]:::ops
+    end
+
+    %% ===== Auto Scaling =====
+    subgraph SCALING["Auto Scaling"]
+        S1[监控指标<br/>QPS·CPU·内存·队列]:::ops
+        S2[扩容规则<br/>超阈值→+实例·冷却期]:::ops
+        S3[缩容规则<br/>低负载→-实例·保基准]:::ops
+        S4[渐变操作<br/>每次±1·≥5 分钟间隔]:::ops
+    end
+
+    %% ===== 日志管理 =====
+    subgraph LOG["日志管理"]
+        L1[日志采集<br/>Filebeat → Loki]:::infra
+        L2[日志存储<br/>Loki 聚合·压缩]:::infra
+        L3[日志检索<br/>Grafana Explore]:::infra
+        L4[日志清理<br/>过期删除·保留策略]:::infra
+    end
+
+    %% ===== 四级健康检查 =====
+    subgraph HEALTH["4 级健康检查"]
+        H1[L1 存活检查<br/>进程·端口·响应]:::health
+        H2[L2 就绪检查<br/>初始化·依赖就绪]:::health
+        H3[L3 能力检查<br/>功能测试·正常响应]:::health
+        H4[L4 端到端检查<br/>完整链路·真实场景]:::health
+        H5[健康评分<br/>分数=权重×归一化指标<br/>≥90绿·≥60黄·≤60红]:::health
+    end
+
+    %% ===== 异常自愈 =====
+    subgraph HEAL["异常自愈"]
+        HL1[异常检测<br/>错误率·时延·断连]:::ops
+        HL2[自愈策略<br/>重启·回滚·重建·切备用]:::ops
+        HL3[自愈执行<br/>自动·记录·升级人类]:::ops
+    end
+
+    %% ===== 备份 =====
+    subgraph BACKUP["备份"]
+        B1[全量备份<br/>每日·完整快照]:::backup
+        B2[增量备份<br/>每 6 小时·变更数据]:::backup
+        B3[事件触发<br/>关键变更前·配置更新]:::backup
+        B4[加密存储<br/>AES-256·SHA-256·异地]:::backup
+    end
+
+    %% ===== 恢复 =====
+    subgraph RESTORE["恢复"]
+        R1[一键恢复<br/>按时间点·最新可用]:::backup
+        R2[部分恢复<br/>指定组件恢复]:::backup
+        R3[恢复验证<br/>校验和·一致性]:::backup
+        R4[恢复演练<br/>季度·报告]:::backup
+    end
+
+    %% ===== 连接 =====
+    AGENT["Agent 引擎"]:::panel
+    MONITOR["监控看板"]:::panel
+
+    DEPLOY -->|"部署"| AGENT
+    SCALING -->|"弹性"| AGENT
+    SCALING -.->|"指标"| DEPLOY
+
+    LOG -.->|"采集"| AGENT & DEPLOY & SCALING
+
+    HEALTH -->|"L1-L4 检查"| AGENT
+    HEALTH -->|"评分"| MONITOR
+
+    HEAL -->|"恢复"| AGENT
+    HEAL -.->|"触发"| SCALING
+
+    BACKUP -->|"备份"| AGENT
+    RESTORE -->|"恢复"| AGENT
+    RESTORE -.->|"验证"| BACKUP

@@ -1,0 +1,95 @@
+%% 多智能体协作引擎架构图（4.12）
+%% 5 种协作模式、任务分解与分配、通信协议、共享黑板、角色注册、结果聚合
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef mode fill:#06b6d4,stroke:#22d3ee,stroke-width:2px,color:#fff
+    classDef task fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef comm fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef role fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef result fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    %% ===== 5 种协作模式 =====
+    M1[Supervisor 模式<br/>管理者 Agent 分解→分发→监督→聚合]:::mode
+    M2[Agent Team 模式<br/>平级协作·自由讨论·共识决策]:::mode
+    M3[管道链模式<br/>串行流水线·上游输出=下游输入]:::mode
+    M4[辩论投票模式<br/>正反方辩论·投票裁决]:::mode
+    M5[市场竞争模式<br/>Agent 竞价接单·性价比最优]:::mode
+
+    %% ===== 任务分解与分配 =====
+    subgraph TASK["任务分解与分配"]
+        T1[任务接收器<br/>接收用户复杂任务]:::task
+        T2[任务分解器<br/>DAG 分解·依赖分析]:::task
+        T3[分配器<br/>按专长·负载·信誉分配]:::task
+        T4[执行跟踪器<br/>进度·状态·超时管理]:::task
+    end
+
+    %% ===== 通信协议与共享黑板 =====
+    subgraph COMM["通信协议与共享黑板"]
+        C1[消息协议<br/>JSON-RPC·事件驱动]:::comm
+        C2[共享黑板<br/>Redis Pub/Sub·广播]:::comm
+        C3[中间结果存储<br/>阶段性输出]:::comm
+        C4[锁与并发控制<br/>防止写冲突]:::comm
+    end
+
+    %% ===== 角色注册中心 =====
+    subgraph REGISTRY["角色定义与专长注册"]
+        R1[角色模板<br/>分析师·编码员·审核员]:::role
+        R2[专长注册表<br/>Expertise Registry]:::role
+        R3[信誉评分<br/>成功率·反馈]:::role
+        R4[动态分配<br/>按场景匹配角色]:::role
+    end
+
+    %% ===== 结果聚合 =====
+    subgraph AGGREGATION["结果聚合与投票"]
+        A1[结果收集器<br/>收集所有子任务结果]:::result
+        A2[冲突检测<br/>一致性检查·矛盾标记]:::result
+        A3[投票机制<br/>多数决·加权·共识]:::result
+        A4[最终输出<br/>综合报告·差异说明]:::result
+    end
+
+    %% ===== 用户 =====
+    USER["用户/开发者"]:::mode
+
+    %% ===== 连接关系 =====
+    USER --> T1
+    T1 --> T2
+    T2 --> T3
+    T3 --> T4
+
+    T4 --> M1
+    T4 --> M2
+    T4 --> M3
+    T4 --> M4
+    T4 --> M5
+
+    M1 --> C2
+    M2 --> C2
+    M3 --> C2
+    M4 --> C2
+    M5 --> C2
+
+    C2 -.-> M1
+    C2 -.-> M2
+    C2 -.-> M3
+    C2 -.-> M4
+    C2 -.-> M5
+
+    REGISTRY --> T3
+    M1 --> REGISTRY
+    M2 --> REGISTRY
+    M3 --> REGISTRY
+    M4 --> REGISTRY
+    M5 --> REGISTRY
+
+    M1 --> A1
+    M2 --> A1
+    M3 --> A1
+    M4 --> A1
+    M5 --> A1
+
+    A1 --> A2
+    A2 --> A3
+    A3 --> A4
+    A4 --> USER

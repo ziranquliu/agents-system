@@ -1,0 +1,86 @@
+%% 部署架构图
+%% 服务端部署（Nginx + API + Worker + DB）+ 客户端访问 + 模型双通道
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef client fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef proxy fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef api fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef worker fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef db fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef cache fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef model fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    subgraph CLIENT["客户端"]
+        BROWSER["Web App（浏览器）"]:::client
+        CLI["CLI 终端"]:::client
+        SDK["外部 SDK 集成"]:::client
+    end
+
+    NGINX["Nginx 反向代理（负载均衡 · SSL · 静态资源）"]:::proxy
+
+    subgraph API_SERVERS["API Server 集群"]
+        API1["API Server 实例 1"]:::api
+        API2["API Server 实例 2"]:::api
+        API3["API Server 实例 3"]:::api
+    end
+
+    subgraph WORKERS["Worker 工作节点池"]
+        W1["Agent Worker 1"]:::worker
+        W2["Agent Worker 2"]:::worker
+        W3["Agent Worker N"]:::worker
+        W_MGR["Worker 管理器（调度·扩缩容·健康检查）"]:::worker
+    end
+
+    subgraph DATA["数据层"]
+        PG["PostgreSQL（用户·Agent·任务·日志）"]:::db
+        REDIS["Redis（会话·缓存·队列）"]:::cache
+        VEC["向量数据库（知识库嵌入）"]:::db
+        FS["文件存储（配置·快照·备份）"]:::db
+    end
+
+    subgraph MODEL["模型接入"]
+        LOCAL["本地模型（Ollama·llama.cpp·vLLM）"]:::model
+        CLOUD["云端模型（OpenAI·Claude·Gemini）"]:::model
+        ROUTER["模型路由（按策略选择）"]:::model
+    end
+
+    %% ===== 连接关系 =====
+    BROWSER -->|HTTPS| NGINX
+    CLI -->|HTTPS| NGINX
+    SDK -->|HTTPS| NGINX
+
+    NGINX -->|反向代理| API1
+    NGINX -->|反向代理| API2
+    NGINX -->|反向代理| API3
+
+    API1 -->|任务分发| W1
+    API1 -->|任务分发| W2
+    API2 -->|任务分发| W2
+    API2 -->|任务分发| W3
+    API3 -->|任务分发| W1
+    API3 -->|任务分发| W3
+
+    W_MGR -.->|管理调度| W1
+    W_MGR -.->|管理调度| W2
+    W_MGR -.->|管理调度| W3
+
+    W1 -->|读写| PG
+    W1 -->|缓存| REDIS
+    W1 -->|向量检索| VEC
+    W2 -->|读写| PG
+    W2 -->|缓存| REDIS
+    W2 -->|向量检索| VEC
+    W3 -->|读写| PG
+    W3 -->|缓存| REDIS
+    W3 -->|向量检索| VEC
+
+    W1 -->|模型推理| ROUTER
+    W2 -->|模型推理| ROUTER
+    W3 -->|模型推理| ROUTER
+
+    ROUTER -->|本地推理| LOCAL
+    ROUTER -->|云端 API| CLOUD
+
+    PG -->|持久化| FS

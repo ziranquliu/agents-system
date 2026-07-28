@@ -1,0 +1,114 @@
+%% 本地组件扫描器架构图（4.10）
+%% 扫描引擎、三大扫描通道、变化检测、告警通知、结果可视化
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef engine fill:#f97316,stroke:#fb923c,stroke-width:2px,color:#fff
+    classDef channel fill:#3b82f6,stroke:#60a5fa,stroke-width:1px,color:#fff
+    classDef detect fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef alert fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef event fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef viz fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+    classDef target fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+
+    %% ===== 定时扫描引擎 =====
+    subgraph ENGINE["扫描引擎 — 定时调度"]
+        E1[定时任务调度器]:::engine
+        E2[扫描间隔：5 分钟]:::engine
+        E3[扫描超时：30 秒]:::engine
+        E4[最大并发：3 通道]:::engine
+    end
+
+    %% ===== 三大扫描通道 =====
+    subgraph CHANNELS["三大扫描通道"]
+        CH1[Agent 扫描通道<br/>状态·配置·资源·连接]:::channel
+        CH2[Skill 扫描通道<br/>状态·版本·依赖完整性·沙箱]:::channel
+        CH3[MCP 扫描通道<br/>状态·协议·连接·响应]:::channel
+    end
+
+    %% ===== 目标组件 =====
+    A1["Agent 实例 1"]:::target
+    A2["Agent 实例 2"]:::target
+    A3["Agent 实例 N"]:::target
+    S1["Skill data-analyzer"]:::target
+    S2["Skill web-search"]:::target
+    S3["Skill doc-processor"]:::target
+    M1["MCP 文件系统"]:::target
+    M2["MCP 数据库"]:::target
+    M3["MCP 浏览器"]:::target
+
+    %% ===== 变化检测引擎 =====
+    subgraph DETECTION["变化检测逻辑"]
+        D1[状态变化检测<br/>running→stopped→error]:::detect
+        D2[配置变化检测<br/>配置哈希对比]:::detect
+        D3[版本变化检测<br/>与已记录版本比对]:::detect
+        D4[依赖变化检测<br/>依赖树哈希对比]:::detect
+        D5[资源变化检测<br/>CPU/内存/连接数]:::detect
+    end
+
+    %% ===== 告警通知通道 =====
+    subgraph ALERTS["告警通知通道"]
+        AL1[控制台通知<br/>仪表盘状态变更·组件健康列表]:::alert
+        AL2[消息中心<br/>全局消息列表·异常详情]:::alert
+        AL3[邮件通知<br/>邮件订阅·严重事件即时推送]:::alert
+    end
+
+    %% ===== 事件总线 =====
+    subgraph BUS["事件总线"]
+        EB1[扫描完成事件]:::event
+        EB2[组件状态变更事件]:::event
+        EB3[告警触发事件]:::event
+        EB4[扫描历史记录]:::event
+    end
+
+    %% ===== 监控仪表盘 =====
+    subgraph DASHBOARD["扫描结果可视化"]
+        DB1[扫描概览卡片<br/>最近扫描时间·总数·异常数]:::viz
+        DB2[组件健康列表<br/>绿/黄/红指示灯·筛选·排序]:::viz
+        DB3[异常详情页<br/>类型·时间·历史记录]:::viz
+        DB4[扫描历史时间线<br/>回溯状态变化]:::viz
+        DB5[扫描配置页<br/>间隔·级别·通知渠道]:::viz
+    end
+
+    %% ===== Redis 缓存去重 =====
+    REDIS["Redis 缓存<br/>扫描结果·告警去重·24h TTL"]:::alert
+
+    %% ===== 连接关系 =====
+    E1 -->|"触发扫描"| CH1
+    E1 -->|"触发扫描"| CH2
+    E1 -->|"触发扫描"| CH3
+
+    CH1 -->|"扫描"| A1
+    CH1 -->|"扫描"| A2
+    CH1 -->|"扫描"| A3
+    CH2 -->|"扫描"| S1
+    CH2 -->|"扫描"| S2
+    CH2 -->|"扫描"| S3
+    CH3 -->|"扫描"| M1
+    CH3 -->|"扫描"| M2
+    CH3 -->|"扫描"| M3
+
+    A1 -->|"结果"| DETECTION
+    A2 -->|"结果"| DETECTION
+    A3 -->|"结果"| DETECTION
+    S1 -->|"结果"| DETECTION
+    S2 -->|"结果"| DETECTION
+    S3 -->|"结果"| DETECTION
+    M1 -->|"结果"| DETECTION
+    M2 -->|"结果"| DETECTION
+    M3 -->|"结果"| DETECTION
+
+    DETECTION -->|"检测到变化"| EB1
+    DETECTION -->|"检测到变化"| EB2
+    DETECTION -->|"异常"| EB3
+
+    EB1 -->|"更新"| REDIS
+    EB2 -->|"推送"| DASHBOARD
+    EB3 -->|"触发告警"| ALERTS
+
+    AL1 -->|"通知"| DASHBOARD
+    AL2 -->|"通知"| DASHBOARD
+    AL3 -->|"通知"| DASHBOARD
+
+    REDIS -.->|"读取去重"| DETECTION

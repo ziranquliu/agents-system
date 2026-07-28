@@ -1,0 +1,104 @@
+%% 会话管理与 Token 优化架构图（4.15 + 4.16）
+%% 会话管理：6 态生命周期、上下文窗口策略、三级存储、断线恢复、多 Agent 协调
+%% Token 管理：实时监控、语义缓存、模型级联、Prompt 压缩、预算控制、成本拆分
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef session fill:#06b6d4,stroke:#22d3ee,stroke-width:2px,color:#fff
+    classDef context fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef storage fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef token fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef monitor fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    %% ===== 会话生命周期 =====
+    subgraph LIFECYCLE["会话生命周期 — 6 态管理"]
+        L1[创建<br/>首次对话触发]:::session
+        L2[活跃<br/>持续交互]:::session
+        L3[空闲<br/>无交互·计时开始]:::session
+        L4[超时<br/>超 TTL→僵尸状态]:::session
+        L5[归档<br/>持久化到冷存储]:::session
+        L6[清理<br/>TTL 到期·不可恢复]:::session
+        L1 --> L2 --> L3 --> L4 --> L5 --> L6
+        L3 -->|"恢复"| L2
+        L4 -->|"手动续期"| L2
+    end
+
+    %% ===== 上下文窗口策略 =====
+    subgraph WINDOW["上下文窗口策略"]
+        W1[滑动窗口 FIFO<br/>保留最近 N 轮·丢弃最早]:::context
+        W2[重要性评分<br/>关键信息保留·丢弃无关]:::context
+        W3[摘要压缩<br/>超出窗口→AI 摘要→替换]:::context
+        W4[混合策略<br/>前 N 轮+摘要+重要性]:::context
+    end
+
+    %% ===== 三级存储 =====
+    subgraph STORAGE["三级存储策略"]
+        S1[Tier 1: 热存储<br/>Redis · 内存级 · ≤1ms<br/>活跃会话·最近 100 条]:::storage
+        S2[Tier 2: 温存储<br/>PostgreSQL · ≤10ms<br/>近 7 天会话·完整记录]:::storage
+        S3[Tier 3: 冷存储<br/>MinIO · ≤100ms<br/>超过 7 天·归档压缩]:::storage
+    end
+
+    %% ===== 断线恢复与会话迁移 =====
+    subgraph RECOVERY["断线恢复与会话迁移"]
+        R1[会话快照<br/>每 N 轮保存状态]:::context
+        R2[断线检测<br/>心跳·WebSocket 重连]:::context
+        R3[会话迁移<br/>跨 Worker 转移·无缝衔接]:::context
+    end
+
+    %% ===== Token 实时监控 =====
+    subgraph MONITOR["Token 实时监控"]
+        M1[当前消耗<br/>实时 Token/s·今日累计]:::monitor
+        M2[历史趋势<br/>日/周/月·按模型·按用户]:::monitor
+        M3[成本分析<br/>按模型单价·按用户分摊]:::monitor
+        M4[预算告警<br/>阈值触发·控制台+邮件]:::monitor
+    end
+
+    %% ===== Token 优化策略 =====
+    subgraph OPTIMIZE["Token 优化策略"]
+        O1[Semantic Cache<br/>语义相似度匹配·缓存复用<br/>TTL 控制·置信度标记·可绕过]:::token
+        O2[模型级联<br/>小模型先试→大模型兜底<br/>超时上限·置信度调优]:::token
+        O3[Prompt 压缩<br/>去冗余·合并历史<br/>关键信息保留]:::token
+        O4[预算控制<br/>软上限优先·降级透明化<br/>用户/模型/时间段配额]:::token
+    end
+
+    %% ===== Token 成本拆分 =====
+    subgraph COST["成本拆分"]
+        C1[按模型拆分<br/>GPT-4o vs Claude vs 本地]:::token
+        C2[按用户拆分<br/>管理员 vs 普通用户]:::token
+        C3[按 Agent 拆分<br/>每个 Agent 独立核算]:::token
+        C4[模型推荐矩阵<br/>价格/速度/能力综合评分]:::token
+    end
+
+    %% ===== 外部 =====
+    USER["用户"]:::sub
+    AGENT["Agent 引擎"]:::sub
+    LLM["大语言模型"]:::sub
+
+    %% ===== 连接关系 =====
+    USER -->|"开始对话"| L1
+    L2 -->|"读写上下文"| WINDOW
+    WINDOW -->|"历史"| STORAGE
+    STORAGE -->|"热->温->冷"| S1
+    S1 --> S2 --> S3
+
+    L2 -->|"断线"| R1
+    R1 -->|"快照恢复"| R2
+    R2 -->|"无缝迁移"| R3
+
+    USER -->|"消耗 Token"| MONITOR
+    MONITOR -->|"数据"| COST
+
+    AGENT -->|"优化 Token 消耗"| OPTIMIZE
+    OPTIMIZE -->|"Semantic Cache"| O1
+    OPTIMIZE -->|"模型级联"| O2
+    OPTIMIZE -->|"Prompt 压缩"| O3
+    OPTIMIZE -->|"预算控制"| O4
+
+    O1 -.->|"缓存命中"| LLM
+    O2 -->|"小模型先试"| LLM
+    O3 -.->|"减少 Token"| LLM
+    O4 -.->|"限流"| USER
+
+    MONITOR -->|"趋势"| COST
+    COST -->|"报告"| USER

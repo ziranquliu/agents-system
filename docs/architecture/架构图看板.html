@@ -1,0 +1,1780 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本地智能体管理系统 — 架构设计看板</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', -apple-system, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 30px 0 20px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            font-size: 28px;
+            background: linear-gradient(135deg, #6366f1, #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header .subtitle {
+            color: #94a3b8;
+            margin-top: 8px;
+            font-size: 14px;
+        }
+        .header .version {
+            display: inline-block;
+            background: #6366f1;
+            color: #fff;
+            padding: 2px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(800px, 1fr));
+            gap: 24px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+        .card-header {
+            padding: 14px 20px;
+            background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(16,185,129,0.15));
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card-header .title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .card-header .badge {
+            font-size: 12px;
+            padding: 2px 10px;
+            border-radius: 10px;
+            background: #334155;
+            color: #94a3b8;
+        }
+        .card-body {
+            padding: 16px;
+            overflow-x: auto;
+        }
+        .card-body .mermaid {
+            width: 100%;
+            text-align: center;
+        }
+        .card-body .mermaid svg {
+            max-width: 100%;
+            height: auto;
+        }
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #475569;
+            font-size: 13px;
+            border-top: 1px solid #334155;
+            margin-top: 30px;
+        }
+        .index-list {
+            max-width: 1800px;
+            margin: 0 auto 30px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+        .index-list a {
+            color: #94a3b8;
+            text-decoration: none;
+            padding: 6px 14px;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .index-list a:hover {
+            border-color: #6366f1;
+            color: #fff;
+            background: rgba(99,102,241,0.1);
+        }
+        @media (max-width: 900px) {
+            .grid { grid-template-columns: 1fr; }
+            .card-body { padding: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧩 本地智能体管理系统 — 架构设计看板</h1>
+        <p class="subtitle">系统架构 · 模块交互 · 生命周期 · 管理体系 · 在线市场 · 部署拓扑 · 批量共享</p>
+        <span class="version">v1.8 — 新增设计文档 / 数据库ER图 / 核心数据流</span>
+    </div>
+
+    <div class="index-list" id="index">
+        <div style="width:100%;text-align:center;margin-bottom:6px;">
+            <input type="text" id="searchBox" placeholder="🔍 搜索架构图（名称或文件名）..." style="width:60%;padding:8px 14px;border:1px solid #475569;border-radius:8px;background:#1e293b;color:#e2e8f0;outline:none;font-size:13px;">
+        </div>
+        <a href="#fig1">图1 分层架构</a>
+        <a href="#fig2">图2 模块交互</a>
+        <a href="#fig3">图3 Agent 生命周期</a>
+        <a href="#fig4">图4 Skill 体系</a>
+        <a href="#fig5">图5 MCP 体系</a>
+        <a href="#fig6">图6 部署架构</a>
+        <a href="#fig7">图7 市场交互流程</a>
+        <a href="#fig8">图8 智能体市场</a>
+        <a href="#fig9">图9 模型市场</a>
+        <a href="#fig10">图10 扫描器</a>
+        <a href="#fig11">图11 更新检测</a>
+        <a href="#fig12">图12 多Agent协作</a>
+        <a href="#fig13">图13 优化引擎</a>
+        <a href="#fig14">图14 会话管理</a>
+        <a href="#fig15">图15 Token管理</a>
+        <a href="#fig16">图16 监控看板</a>
+        <a href="#fig17">图17 运维/备份</a>
+        <a href="#fig18">图18 审计/记忆</a>
+        <a href="#fig19">图19 Skill/MCP共享</a>
+        <a href="#fig20">图20 操作审计</a>
+        <a href="#fig21">图21 运维备份</a>
+        <a href="#fig22">图22 监控健康</a>
+        <a href="#fig23">图23 协作引擎</a>
+        <a href="#fig24">图24 模型配置模板</a>
+        <a href="#fig25">图25 数据库ER图</a>
+        <a href="#fig26">图26 核心数据流</a>
+    </div>
+
+    <div class="grid">
+        <!-- 图1 -->
+        <div class="card fig-item" id="fig1">
+            <div class="card-header">
+                <span class="title">📐 图1 — 系统整体分层架构图（v1.6）</span>
+                <span class="badge">architecture-overview.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 系统整体分层架构图（v1.6）
+%% 新增：批量安装·跨Agent共享·会话多选导出
+
+graph TB
+    classDef ui fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef app fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef core fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef market fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef model fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef infra fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef label fill:#555,stroke:none,color:#94a3b8,font-size:11px
+
+    L1_USER["用户交互层"] -.-> L1
+    subgraph L1[" "]
+        UI1[Web 管理控制台]:::ui
+        UI2[CLI 命令行工具]:::ui
+        UI3[API 网关入口]:::ui
+    end
+
+    L2_APP["应用服务层"] -.-> L2
+    subgraph L2[" "]
+        AS1[用户管理]:::app
+        AS2[权限认证]:::app
+        AS3[任务调度]:::app
+        AS4[日志审计]:::app
+        AS5[仪表盘]:::app
+    end
+
+    L3_CORE["核心能力层"] -.-> L3
+    subgraph L3[" "]
+        C1[Agent 引擎<br/>生命周期·协作·会话]:::core
+        C2[Skill 系统<br/>注册·版本·依赖·runtime<br/>◈ 批量安装·跨Agent复用<br/>◈ 直接引用/复制/模板]:::core
+        C3[MCP 网关<br/>注册·发现·健康检查·调用<br/>◈ 批量安装·跨Agent同步<br/>◈ 直接引用/复制配置/模板]:::core
+        C4[知识库引擎]:::core
+        C5[工作流引擎]:::core
+        C6[记忆管理<br/>短期·长期·共享]:::core
+        C7[会话管理<br/>6态生命周期·三级存储<br/>◈ 多选导出 JSON/MD/HTML]:::core
+    end
+
+    L3_MARKET["在线市场层"] -.-> LM
+    subgraph LM[" "]
+        MKT_AGENT[智能体在线市场<br/>12类预置模板·一键安装]:::market
+        MKT_MODEL[模型在线市场<br/>本地模型·云端 API·一键接入]:::market
+        MKT_BATCH[批量安装中心<br/>批量选择→预检→执行→报告<br/>跨Agent 批量分发]:::market
+    end
+
+    L4_MODEL["模型接入层"] -.-> L4
+    subgraph L4[" "]
+        M1[OpenAI 适配器]:::model
+        M2[Claude 适配器]:::model
+        M3[本地模型适配器]:::model
+        M4[多模型路由]:::model
+        M5[模型负载均衡]:::model
+        M6[故障转移]:::model
+    end
+
+    L5_INFRA["基础设施层"] -.-> L5
+    subgraph L5[" "]
+        I1[PostgreSQL]:::infra
+        I2[Redis 缓存]:::infra
+        I3[消息队列]:::infra
+        I4[文件存储]:::infra
+        I5[向量数据库]:::infra
+    end
+
+    F1[▼ 请求流入]:::label
+    F2[▼ 服务编排]:::label
+    F3[▼ 能力调用]:::label
+    F4[▼ 模型推理]:::label
+    F5[▲ 数据持久化]:::label
+
+    L1 --> F1 --> L2 --> F2 --> L3 --> F3 --> LM --> F4 --> L4 --> F5 --> L5
+    L5 -.->|数据返回| L4 -.->|结果返回| LM -.->|响应返回| L3 -.->|响应返回| L2 -.->|响应返回| L1
+
+    MKT_BATCH -->|"批量安装 Skill"| C2
+    MKT_BATCH -->|"批量注册 MCP"| C3
+    C2 -->|"跨Agent共享"| C1
+    C3 -->|"跨Agent同步"| C1
+    C7 -->|"多选导出"| UI1
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图2 -->
+        <div class="card fig-item" id="fig2">
+            <div class="card-header">
+                <span class="title">🔄 图2 — 核心模块交互图（v1.6）</span>
+                <span class="badge">module-interaction.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 核心模块交互图（v1.6）
+%% 新增：SKILL_SHARING、MCP_SHARING、会话多格式导出、变更通知
+
+graph LR
+    classDef agent fill:#6366f1,stroke:#818cf8,stroke-width:3px,color:#fff
+    classDef skill fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef mcp fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef kb fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef wf fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef mem fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef session fill:#06b6d4,stroke:#22d3ee,stroke-width:2px,color:#fff
+    classDef market fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef share fill:#a855f7,stroke:#c084fc,stroke-width:2px,color:#fff
+    classDef v16 fill:#fbbf24,stroke:#fde68a,stroke-width:3px,color:#1e293b
+    classDef ext fill:#475569,stroke:#64748b,stroke-width:1px,color:#cbd5e1
+
+    AGENT["Agent 引擎"]:::agent
+    SKILL["Skill 系统"]:::skill
+    MCP["MCP 网关"]:::mcp
+    KB["知识库引擎"]:::kb
+    WF["工作流引擎"]:::wf
+    MEM["记忆管理"]:::mem
+    SESSION["会话管理"]:::session
+
+    AGENT_MKT["智能体在线市场<br/>预置 12 类模板·一键安装"]:::market
+    MODEL_MKT["模型在线市场<br/>本地+云端·对比·路由"]:::market
+
+    SKILL_SHARING["Skill 共享中心 ◈v16<br/>批量安装·3种复用方式<br/>直接引用/复制/模板"]:::share
+    MCP_SHARING["MCP 共享中心 ◈v16<br/>批量安装·3种同步方式<br/>直接引用/复制配置/模板"]:::share
+
+    USER["用户/开发者"]:::ext
+    LLM["大语言模型"]:::ext
+    MCP_SRV["MCP Servers（文件·DB·浏览器·搜索）"]:::ext
+    SKILL_REPO["Skill 仓库（本地 + 市场）"]:::ext
+    EXT["导出文件<br/>JSON/MD/HTML"]:::ext
+
+    USER -->|"创建/配置"| AGENT
+    AGENT -->|"加载 Skill"| SKILL
+    AGENT -->|"调用工具"| MCP
+    AGENT -->|"检索知识"| KB
+    AGENT -->|"执行流程"| WF
+    AGENT -->|"读写记忆"| MEM
+    AGENT -->|"管理会话"| SESSION
+    AGENT -->|"模型推理"| LLM
+
+    SKILL -->|"安装/更新"| SKILL_REPO
+    SKILL -.->|"注册工具接口"| AGENT
+    MCP -->|"发现·调用"| MCP_SRV
+    MCP -.->|"暴露工具"| AGENT
+    KB -.->|"RAG 增强"| AGENT
+    WF -.->|"多步骤编排"| AGENT
+    MEM -.->|"上下文持久化"| AGENT
+    SESSION -.->|"上下文管理"| AGENT
+
+    USER -->|"浏览/安装"| AGENT_MKT
+    USER -->|"浏览/配置"| MODEL_MKT
+    AGENT_MKT -->|"下载模板"| AGENT
+    AGENT_MKT -->|"校验依赖"| SKILL
+    AGENT_MKT -->|"绑定模型"| MODEL_MKT
+    MODEL_MKT -->|"注册模型"| LLM
+    MODEL_MKT -->|"路由策略"| AGENT
+
+    AGENT_MKT -->|"批量安装 Skill"| SKILL_SHARING
+    AGENT_MKT -->|"批量安装 MCP"| MCP_SHARING
+    SKILL_SHARING -->|"跨Agent 共享"| SKILL
+    MCP_SHARING -->|"跨Agent 同步"| MCP
+
+    SKILL_SHARING -->|"引用关系图·变更通知"| AGENT
+    MCP_SHARING -->|"引用关系图·变更通知"| AGENT
+
+    SESSION -->|"多选导出"| EXT
+    USER -->|"查看/下载"| EXT
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图3 -->
+        <div class="card fig-item" id="fig3">
+            <div class="card-header">
+                <span class="title">⏱ 图3 — Agent 生命周期流程图</span>
+                <span class="badge">agent-lifecycle.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% Agent 生命周期流程图
+%% 转换为 graph TB 以确保 Mermaid 11.16.0 兼容性
+
+graph TB
+    classDef created fill:#6366f1,stroke:#818cf8,color:#fff
+    classDef config fill:#3b82f6,stroke:#60a5fa,color:#fff
+    classDef deploy fill:#8b5cf6,stroke:#a78bfa,color:#fff
+    classDef running fill:#10b981,stroke:#34d399,color:#fff
+    classDef monitor fill:#f59e0b,stroke:#fbbf24,color:#fff
+    classDef stopped fill:#ef4444,stroke:#f87171,color:#fff
+    classDef archive fill:#475569,stroke:#64748b,color:#fff
+    classDef inner fill:#1e293b,stroke:#475569,color:#e2e8f0
+
+    START(( )) --> 已创建_sub
+    subgraph 已创建_sub["已创建"]
+        创建_1[分配唯一ID]:::inner --> 创建_2[设置基础元数据]:::inner
+    end
+    已创建_sub -->|"填写配置信息"| 配置中_sub
+    已创建_sub -->|"直接废弃"| 已归档_sub
+    subgraph 配置中_sub["配置中"]
+        配置_1[选择模型]:::inner --> 配置_2[绑定Skill列表]:::inner --> 配置_3[配置MCP接入]:::inner --> 配置_4[设置系统提示词]:::inner --> 配置_5[配置记忆策略]:::inner
+    end
+    配置中_sub -->|"配置完成·保存"| 已部署_sub
+    配置中_sub -->|"取消配置·回退"| 已创建_sub
+    subgraph 已部署_sub["已部署"]
+        部署_1[验证依赖项]:::inner --> 部署_2[分配资源配额]:::inner --> 部署_3[注册到调度器]:::inner
+    end
+    已部署_sub -->|"启动Agent"| 运行中_sub
+    已部署_sub -->|"需要修改配置"| 配置中_sub
+    subgraph 运行中_sub["运行中"]
+        运行_1[处理任务]:::inner --> 运行_2[调用Skill]:::inner --> 运行_3[调用MCP工具]:::inner --> 运行_4[生成响应]:::inner
+        运行_4 -->|"循环监听"| 运行_1
+    end
+    运行中_sub -->|"触发监控条件"| 监控中_sub
+    运行中_sub -->|"手动停止"| 已停用_node
+    subgraph 监控中_sub["监控中"]
+        监控_1[健康检查]:::inner --> 监控_2[性能采样]:::inner --> 监控_3[异常检测]:::inner --> 监控_4[自动恢复尝试]:::inner
+    end
+    监控中_sub -->|"恢复正常"| 运行中_sub
+    监控中_sub -->|"恢复失败·达最大重试"| 已停用_node
+    监控中_sub -->|"需调整配置"| 配置中_sub
+    已停用_node[已停用]:::stopped -->|"重新启用"| 运行中_sub
+    已停用_node -->|"确认不再使用"| 已归档_sub
+    subgraph 已归档_sub["已归档"]
+        归档_1[数据备份]:::inner --> 归档_2[资源释放]:::inner --> 归档_3[记录归档日志]:::inner
+    end
+    已归档_sub --> END(( ))
+                </pre>
+        
+            </div>
+        </div>
+
+        <!-- 图4 -->
+        <div class="card fig-item" id="fig4">
+            <div class="card-header">
+                <span class="title">🧩 图4 — Skill 管理体系架构图</span>
+                <span class="badge">skill-architecture.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% Skill 管理体系架构图
+graph TB
+    classDef registry fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef version fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef deps fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef runtime fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef store fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef dev fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef user fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    subgraph REG["Skill 注册中心"]
+        REG1[元数据存储]:::sub; REG2[技能分类目录]:::sub; REG3[发现与搜索]:::sub; REG4[权限管理]:::sub
+    end
+    subgraph VER["版本仓库"]
+        VER1[语义化版本控制]:::sub; VER2[多版本共存]:::sub; VER3[版本回滚]:::sub; VER4[版本发布管道]:::sub
+    end
+    subgraph DEP["依赖管理器"]
+        DEP1[依赖声明解析]:::sub; DEP2[依赖树计算]:::sub; DEP3[冲突检测]:::sub; DEP4[自动安装]:::sub
+    end
+    subgraph RUN["Skill 运行时"]
+        RUN1[沙箱隔离]:::sub; RUN2[生命周期管理]:::sub; RUN3[资源限制]:::sub; RUN4[事件钩子]:::sub
+    end
+    DEVELOPER["Skill 开发者"]:::dev; SKILL_REPO["Skill 在线市场"]:::store; USER_AGENT["Agent / 用户"]:::user
+    DEVELOPER -->|"① 编写代码"| REG -->|"② 注册"| VER -->|"③ 发布"| SKILL_REPO
+    SKILL_REPO -->|"④ 拉取"| DEP -->|"⑤ 解析"| REG
+    DEP -->|"⑥ 下载"| SKILL_REPO -->|"⑦ 就绪"| RUN
+    REG -->|"⑧ 激活"| RUN -->|"⑨ 提供能力"| USER_AGENT
+    USER_AGENT -->|"⑩ 反馈"| REG; RUN -->|"日志"| DEVELOPER
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图5 -->
+        <div class="card fig-item" id="fig5">
+            <div class="card-header">
+                <span class="title">🌉 图5 — MCP 管理体系架构图</span>
+                <span class="badge">mcp-architecture.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% MCP 管理体系架构图
+graph TB
+    classDef registry fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef discovery fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef health fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef gateway fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef market fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef server fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef agent fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    subgraph REG["MCP Server 注册中心"]
+        REG1[元数据注册]:::sub; REG2[能力描述索引]:::sub; REG3[工具清单管理]:::sub; REG4[Server 分类]:::sub
+    end
+    subgraph DISC["服务发现"]
+        DISC1[自动发现]:::sub; DISC2[配置发现]:::sub; DISC3[动态热加载]:::sub; DISC4[优先级]:::sub
+    end
+    subgraph HC["健康检查"]
+        HC1[心跳检测]:::sub; HC2[超时监控]:::sub; HC3[自动重连]:::sub; HC4[状态报告]:::sub
+    end
+    subgraph GW["调用网关"]
+        GW1[请求路由]:::sub; GW2[参数校验]:::sub; GW3[结果格式化]:::sub; GW4[调用限流]:::sub; GW5[审计日志]:::sub
+    end
+    MCP_MARKET["MCP 在线市场"]:::market
+    S1["文件系统 MCP"]:::server; S2["数据库 MCP"]:::server; S3["浏览器 MCP"]:::server; S4["搜索 MCP"]:::server; S5["自定义 MCP"]:::server
+    AGENT["Agent 引擎"]:::agent
+
+    MCP_MARKET -->|"① 下载/安装"| REG
+    REG -->|"② 注册"| DISC; REG -->|"③ 端点"| GW
+    DISC -->|"④ 发现"| S1 & S2 & S3 & S4 & S5
+    S1 & S2 & S3 & S4 & S5 -->|"⑤ 心跳"| HC
+    HC -->|"⑥ 状态"| GW
+    AGENT -->|"⑦ 调用请求"| GW
+    GW -->|"⑧ 路由"| S1 & S2 & S3 & S4 & S5
+    S1 & S2 & S3 & S4 & S5 -->|"⑨ 结果"| GW
+    GW -->|"⑩ 响应"| AGENT
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图6 -->
+        <div class="card fig-item" id="fig6">
+            <div class="card-header">
+                <span class="title">🏗️ 图6 — 部署架构图</span>
+                <span class="badge">deployment-architecture.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 部署架构图
+graph TB
+    classDef client fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef proxy fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef api fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef worker fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef db fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef cache fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef model fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+
+    subgraph CLIENT["客户端"]
+        BROWSER["Web App（浏览器）"]:::client; CLI["CLI 终端"]:::client; SDK["外部 SDK"]:::client
+    end
+    NGINX["Nginx 反向代理（负载均衡·SSL·静态资源）"]:::proxy
+    subgraph API_SERVERS["API Server 集群"]
+        API1["API 实例 1"]:::api; API2["API 实例 2"]:::api; API3["API 实例 3"]:::api
+    end
+    subgraph WORKERS["Worker 节点池"]
+        W1["Worker 1"]:::worker; W2["Worker 2"]:::worker; W3["Worker N"]:::worker; W_MGR["Worker 管理器"]:::worker
+    end
+    subgraph DATA["数据层"]
+        PG["PostgreSQL（用户·Agent·任务·日志）"]:::db; REDIS["Redis（会话·缓存·队列）"]:::cache; VEC["向量数据库"]:::db; FS["文件存储"]:::db
+    end
+    subgraph MODEL["模型接入"]
+        LOCAL["本地模型（Ollama·llama.cpp·vLLM）"]:::model; CLOUD["云端模型（OpenAI·Claude·Gemini）"]:::model; ROUTER["模型路由"]:::model
+    end
+
+    BROWSER & CLI & SDK -->|HTTPS| NGINX
+    NGINX -->|反向代理| API1 & API2 & API3
+    API1 & API2 & API3 -->|任务分发| W1 & W2 & W3
+    W_MGR -.->|管理| W1 & W2 & W3
+    W1 & W2 & W3 -->|读写| PG
+    W1 & W2 & W3 -->|缓存| REDIS
+    W1 & W2 & W3 -->|检索| VEC
+    W1 & W2 & W3 -->|推理| ROUTER
+    ROUTER -->|本地| LOCAL
+    ROUTER -->|云端| CLOUD
+    PG -->|持久化| FS
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图7 -->
+        <div class="card fig-item" id="fig7">
+            <div class="card-header">
+                <span class="title">🌐 图7 — Skill/MCP/Agent/Model 市场交互流程图</span>
+                <span class="badge">marketplace-flow.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% Skill/MCP/Agent/Model 市场交互流程图（v1.2）
+graph TB
+    classDef user fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef local fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef server fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef market fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef phase fill:#0f172a,stroke:none,color:#94a3b8,font-size:11px
+
+    PHASE1["阶段1: 浏览与搜索"]:::phase
+    U1["用户打开市场页面"]:::user; LC1["管理端请求首页"]:::local; LS1["服务端 GET /api/market/featured"]:::server; MS1["市场端返回推荐"]:::market
+    U1 --> LC1 --> LS1 --> MS1; MS1 --> LS1 --> LC1 --> U1
+    U1_S["用户搜索/筛选"]:::user; LC1_S["管理端发送搜索"]:::local; LS1_S["服务端 GET /api/market/search"]:::server; MS1_S["市场端返回结果"]:::market
+    U1_S --> LC1_S --> LS1_S --> MS1_S; MS1_S --> LS1_S --> LC1_S --> U1_S
+
+    PHASE2["阶段2-3: Skill/MCP 安装"]:::phase
+    U2["用户选择安装"]:::user; LC2["管理端 POST /api/install"]:::local; LS2["服务端下载·验证·注册"]:::server; MS2["市场端返回包"]:::market
+    U2 --> LC2 --> LS2 --> MS2; MS2 --> LS2 --> LC2 -->|安装成功| U2
+
+    PHASE3["阶段4: 智能体市场 — 模板安装"]:::phase
+    U3["浏览智能体市场"]:::user; U3_1["选择模板（如编程助手）"]:::user
+    LC3["管理端获取模板"]:::local; LS3["服务端 GET /api/market/agent-templates"]:::server; MS3["市场端返回模板"]:::market
+    U3 --> U3_1 --> LC3 --> LS3 --> MS3; MS3 --> LS3 --> LC3 --> U3_1
+    U3_2["用户安装模板"]:::user; LC3_1["配置面板"]:::local; U3_3["填写名称·模型·Skill·知识库·Prompt"]:::user
+    LC3_2["提交配置"]:::local; LS3_1["生成 Agent 实例"]:::server; LS3_2["部署运行"]:::server
+    U3_2 --> LC3_1 --> U3_3 --> LC3_2 --> LS3_1 --> LS3_2
+    U3_DONE["✓ 出现在「我的 Agent」"]:::user <--> LS3_2
+
+    PHASE4["阶段5: 模型市场 — 配置接入"]:::phase
+    U4["浏览模型市场"]:::user; U4_1["选择模型"]:::user; LC4["管理端加载配置"]:::local
+    U4_LOCAL["本地模型 填写地址·部署方式"]:::user; LC4_LOCAL["测试连接"]:::local; LS4_LOCAL["验证可达"]:::server; U4_LOCAL_OK["✓ 接入成功"]:::user
+    U4_CLOUD["云端 API 填写 Key·版本"]:::user; LC4_CLOUD["测试连接"]:::local; LS4_CLOUD["验证 API"]:::server; U4_CLOUD_OK["✓ 接入成功"]:::user
+    U4_ROUTE["设置路由规则"]:::user; U4_BIND["绑定到 Agent"]:::user; U4_DONE["✓ 出现在「已接入」列表"]:::user
+
+    U4 --> U4_1 --> LC4 --> U4_LOCAL & U4_CLOUD
+    U4_LOCAL --> LC4_LOCAL --> LS4_LOCAL --> U4_LOCAL_OK
+    U4_CLOUD --> LC4_CLOUD --> LS4_CLOUD --> U4_CLOUD_OK
+    U4_LOCAL_OK & U4_CLOUD_OK --> U4_ROUTE --> U4_BIND --> U4_DONE
+    U4_ROUTE -->|跳过| U4_DONE
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图8 -->
+        <div class="card fig-item" id="fig8">
+            <div class="card-header">
+                <span class="title" style="color:#fbbf24;">✨ 图8 — 智能体在线市场架构图（新增）</span>
+                <span class="badge">agent-marketplace.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 智能体在线市场架构图
+graph TB
+    classDef header fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef template fill:#3b82f6,stroke:#60a5fa,stroke-width:1px,color:#fff
+    classDef flow fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef config fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef custom fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef dev fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    subgraph HOME["市场首页"]
+        REC[推荐区·精选]:::sub; CAT[分类导航·12类]:::sub; SEARCH[搜索栏]:::sub; STAT[安装统计]:::sub
+    end
+    subgraph TEMPLATES["预置 Agent 模板库（12类）"]
+        T1[通用对话助手]:::template; T2[编程开发助手]:::template; T3[数据分析师]:::template; T4[内容写作助手]:::template; T5[客服支持 Agent]:::template; T6[研究分析师]:::template; T7[流程自动化 Agent]:::template; T8[翻译助手]:::template; T9[教育辅导 Agent]:::template; T10[项目管理助手]:::template; T11[知识问答专家]:::template; T12[图像设计助手]:::template
+    end
+    subgraph INSTALL["一键安装流程"]
+        I1[①选择]:::sub; I2[②配置]:::sub; I3[③预览]:::sub; I4[④确认]:::sub; I5[⑤部署]:::sub; I6[⑥完成]:::sub
+    end
+    subgraph CONFIG["配置面板"]
+        C1[名称·头像]:::config; C2[模型选择]:::config; C3[Skill 绑定]:::config; C4[知识库关联]:::config; C5[Prompt·温度]:::config
+    end
+    subgraph CUSTOM["定制化"]
+        CU1[模型切换]:::custom; CU2[微调]:::custom; CU3[Skill 增删]:::custom; CU4[工具绑定]:::custom; CU5[知识库]:::custom; CU6[参数]:::custom
+    end
+    subgraph DEVELOPER["开发者上传"]
+        D1[打包]:::dev; D2[校验]:::dev; D3[测试]:::dev; D4[发布]:::dev
+    end
+    USER["用户"]:::header; AGENT_E["Agent 引擎"]:::flow; SKILL_S["Skill 系统"]:::flow
+    USER --> HOME --> TEMPLATES --> INSTALL --> CONFIG; CONFIG --> I3 --> I4 --> AGENT_E --> I5 --> I6
+    USER --> CUSTOM; CUSTOM -.-> AGENT_E; DEVELOPER -->|上传| TEMPLATES; D1 --> D2 --> D3 --> D4
+    CONFIG -.-> SKILL_S & AGENT_E
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图9 -->
+        <div class="card fig-item" id="fig9">
+            <div class="card-header">
+                <span class="title" style="color:#fbbf24;">✨ 图9 — 模型在线市场架构图（新增）</span>
+                <span class="badge">model-marketplace.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 模型在线市场架构图
+graph TB
+    classDef header fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef local fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef cloud fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef flow fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef route fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef compare fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    subgraph HOME["市场首页"]
+        NAV[分类导航]:::sub; SEARCH[搜索筛选]:::sub; COMPARE[模型对比]:::compare
+    end
+    subgraph LOCAL["本地模型"]
+        L1[DeepSeek-R1/V3]:::local; L2[Qwen2.5]:::local; L3[Llama 3.1]:::local; L4[Mistral]:::local; L5[Phi-3]:::local; L6[GLM-4]:::local; L7[Yi 1.5]:::local; L8[Gemma 2]:::local
+    end
+    subgraph CLOUD["云端 API"]
+        C1[GPT-4o]:::cloud; C2[Claude 3.5]:::cloud; C3[Gemini 1.5]:::cloud; C4[DeepSeek]:::cloud; C5[GLM-4]:::cloud; C6[Spark]:::cloud; C7[Doubao]:::cloud; C8[Wenxin]:::cloud
+    end
+    subgraph SETUP["一键接入"]
+        S1[①选择]:::sub; S2_LOCAL[本地·地址·名称]:::flow; S2_CLOUD[云端·Key·版本]:::flow; S3[②测试连接]:::flow; S4[③注册]:::flow
+    end
+    subgraph ROUTE["路由与故障转移"]
+        R1[优先级]:::route; R2[负载均衡]:::route; R3[成本优先]:::route; R4[区域路由]:::route
+    end
+    subgraph MON["监控"]
+        M1[延迟]:::sub; M2[错误率]:::sub; M3[成本]:::sub; M4[告警]:::sub
+    end
+    USER["用户/管理员"]:::header; AGENT["Agent 引擎"]:::flow
+
+    USER --> HOME --> LOCAL & CLOUD & COMPARE
+    LOCAL & CLOUD --> SETUP
+    S1 --> S2_LOCAL & S2_CLOUD --> S3 --> S4
+    S4 --> ROUTE --> AGENT; S4 --> AGENT
+    ROUTE --> MON; AGENT -.-> LOCAL & CLOUD; MON -.-> USER
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图10 -->
+        <div class="card fig-item" id="fig10">
+            <div class="card-header">
+                <span class="title" style="color:#fb923c;">✨ 图10 — 本地组件扫描器架构图（新增）</span>
+                <span class="badge">scanner-architecture.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 本地组件扫描器架构图
+graph TB
+    classDef engine fill:#f97316,stroke:#fb923c,stroke-width:2px,color:#fff
+    classDef channel fill:#3b82f6,stroke:#60a5fa,stroke-width:1px,color:#fff
+    classDef detect fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef alert fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef event fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef viz fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+    classDef target fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+
+    subgraph ENGINE["扫描引擎 — 定时调度"]
+        E1[定时任务调度器]:::engine; E2[扫描间隔：5 分钟]:::engine; E3[扫描超时：30 秒]:::engine; E4[最大并发：3 通道]:::engine
+    end
+    subgraph CHANNELS["三大扫描通道"]
+        CH1[Agent 扫描通道]:::channel; CH2[Skill 扫描通道]:::channel; CH3[MCP 扫描通道]:::channel
+    end
+    A1["Agent 实例 1"]:::target; A2["Agent 实例 2"]:::target; A3["Agent 实例 N"]:::target
+    S1["Skill data-analyzer"]:::target; S2["Skill web-search"]:::target; S3["Skill doc-processor"]:::target
+    M1["MCP 文件系统"]:::target; M2["MCP 数据库"]:::target; M3["MCP 浏览器"]:::target
+    subgraph DETECTION["变化检测"]
+        D1[状态变化检测]:::detect; D2[配置变化检测]:::detect; D3[版本变化检测]:::detect; D4[依赖变化检测]:::detect; D5[资源变化检测]:::detect
+    end
+    subgraph ALERTS["告警通道"]
+        AL1[控制台通知]:::alert; AL2[消息中心]:::alert; AL3[邮件通知]:::alert
+    end
+    subgraph BUS["事件总线"]
+        EB1[扫描完成事件]:::event; EB2[组件状态变更]:::event; EB3[告警触发事件]:::event; EB4[扫描历史记录]:::event
+    end
+    subgraph DASHBOARD["可视化"]
+        DB1[扫描概览卡片]:::viz; DB2[组件健康列表]:::viz; DB3[异常详情页]:::viz; DB4[扫描历史时间线]:::viz; DB5[扫描配置页]:::viz
+    end
+    REDIS["Redis 缓存"]:::alert
+
+    E1 -->|触发扫描| CH1 & CH2 & CH3
+    CH1 -->|扫描| A1 & A2 & A3; CH2 -->|扫描| S1 & S2 & S3; CH3 -->|扫描| M1 & M2 & M3
+    A1 & A2 & A3 & S1 & S2 & S3 & M1 & M2 & M3 -->|结果| DETECTION
+    DETECTION -->|变化| EB1 & EB2; DETECTION -->|异常| EB3
+    EB1 -->|更新| REDIS; EB2 -->|推送| DASHBOARD; EB3 -->|告警| ALERTS
+    AL1 & AL2 & AL3 -->|通知| DASHBOARD; REDIS -.->|去重| DETECTION
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图11 -->
+        <div class="card fig-item" id="fig11">
+            <div class="card-header">
+                <span class="title" style="color:#c084fc;">✨ 图11 — 统一更新检测中心架构图（新增）</span>
+                <span class="badge">update-checker.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 统一更新检测中心架构图
+graph TB
+    classDef engine fill:#a855f7,stroke:#c084fc,stroke-width:2px,color:#fff
+    classDef compatibility fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef strategy fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef execute fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef rollback fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef report fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef target fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    subgraph ENGINE["检测引擎 — 定时版本对比"]
+        E1[定时任务 24h]:::engine; E2[Agent 版本对比]:::engine; E3[Skill 版本对比]:::engine; E4[MCP 版本对比]:::engine; E5[系统核心升级]:::engine
+    end
+    LOCAL["本地版本库"]:::target; MARKET["市场版本库"]:::target
+    subgraph CHECK["兼容性预检"]
+        C1[版本冲突]:::compatibility; C2[依赖断裂]:::compatibility; C3[API 兼容]:::compatibility; C4[权限变更]:::compatibility; C5[签名验证]:::compatibility; C6[总评]:::compatibility
+    end
+    subgraph STRATEGY["策略"]
+        ST1[自动更新]:::strategy; ST2[通知后更新]:::strategy; ST3[批量更新]:::strategy; ST4[忽略版本]:::strategy
+    end
+    subgraph EXEC["执行"]
+        EX1[创建快照]:::execute; EX2[下载安装]:::execute; EX3[更新记录]:::execute; EX4[发布事件]:::execute
+    end
+    subgraph VERIFY["验证"]
+        V1[Agent 测试]:::execute; V2[Skill 测试]:::execute; V3[MCP 测试]:::execute
+    end
+    subgraph ROLLBACK["回滚"]
+        RB1[自动回滚]:::rollback; RB2[手动回滚]:::rollback; RB3[快照保留90天]:::rollback
+    end
+    subgraph REPORT["报告"]
+        R1[更新概览]:::report; R2[变更摘要]:::report; R3[兼容性结果]:::report; R4[验证结果]:::report; R5[回滚记录]:::report
+    end
+    subgraph UI["管理界面"]
+        U1[概览统计]:::sub; U2[待更新列表]:::sub; U3[详情·Diff]:::sub; U4[批量操作]:::sub; U5[更新历史]:::sub
+    end
+    USER["用户"]:::target
+
+    LOCAL & MARKET -->|版本数据| E2 & E3 & E4 & E5
+    E2 & E3 & E4 & E5 -->|发现新版本| CHECK
+    CHECK -->|预检结果| STRATEGY -->|通知| USER
+    USER -->|选择| EXEC -->|安装| VERIFY
+    VERIFY -->|全部通过| R1; VERIFY -->|失败| ROLLBACK
+    ROLLBACK -->|回滚完成| R1; R1 -->|生成| REPORT -->|展示| UI
+    UI -->|交互| USER
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图12 -->
+        <div class="card fig-item" id="fig12">
+            <div class="card-header">
+                <span class="title" style="color:#22d3ee;">✨ 图12 — 多智能体协作架构图</span>
+                <span class="badge">multi-agent-collaboration.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 多智能体协作架构图
+graph TB
+    classDef mode fill:#06b4d6,stroke:#22d3ee,stroke-width:2px,color:#fff
+    classDef task fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef comm fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef role fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef result fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+
+    M1[Supervisor 模式]:::mode; M2[Team 模式]:::mode; M3[管道链模式]:::mode; M4[辩论投票模式]:::mode; M5[市场竞争模式]:::mode
+    subgraph TASK["任务分解与分配"]
+        T1[任务接收器]:::task; T2[任务分解器 DAG]:::task; T3[分配器]:::task; T4[执行跟踪器]:::task
+    end
+    subgraph COMM["通信与共享黑板"]
+        C1[JSON-RPC 消息协议]:::comm; C2[Redis 共享黑板]:::comm; C3[中间结果存储]:::comm; C4[锁与并发]:::comm
+    end
+    subgraph ROLE["角色与分工"]
+        R1[角色模板库]:::role; R2[专长注册表]:::role; R3[信誉评分]:::role; R4[动态分配]:::role
+    end
+    subgraph AGG["结果聚合"]
+        A1[结果收集器]:::result; A2[冲突检测]:::result; A3[投票机制]:::result; A4[最终输出]:::result
+    end
+    USER["用户"]:::mode
+    USER --> T1 --> T2 --> T3 --> T4
+    T4 --> M1 & M2 & M3 & M4 & M5
+    M1 & M2 & M3 & M4 & M5 --> C2; C2 -.-> M1 & M2 & M3 & M4 & M5
+    ROLE --> T3; M1 & M2 & M3 & M4 & M5 --> ROLE
+    M1 & M2 & M3 & M4 & M5 --> A1 --> A2 --> A3 --> A4 --> USER
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图13 -->
+        <div class="card fig-item" id="fig13">
+            <div class="card-header">
+                <span class="title" style="color:#22d3ee;">✨ 图13 — Skill/MCP 优化引擎架构图</span>
+                <span class="badge">optimization-architecture.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% Skill + MCP 优化架构图（4.13 + 4.14）
+%% Skill 优化：三级缓存、预加载、DAG优化、Skill融合
+%% MCP 优化：连接池、请求合并、熔断、负载均衡、安全校验
+
+graph TB
+    classDef skill fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef mcp fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef monitoring fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    %% ===== Skill 优化 =====
+    subgraph SKILL_OPT["Skill 优化策略"]
+        direction TB
+        S1[三级缓存<br/>L1 内存·L2 Redis·L3 本地<br/>命中率 > 85%]:::skill
+        S2[预加载机制<br/>热门 Skill 常驻·冷启动消除<br/>LRU 淘汰·热度预测]:::skill
+        S3[DAG 依赖优化<br/>并行加载·减少等待<br/>依赖树拓扑排序]:::skill
+        S4[Skill 融合<br/>高频组合→融合 Skill<br/>减少 IPC 开销]:::skill
+    end
+
+    %% ===== MCP 优化 =====
+    subgraph MCP_OPT["MCP 优化策略"]
+        direction TB
+        M1[连接池管理<br/>复用 MCP 连接·减少握手<br/>最大连接数·空闲回收]:::mcp
+        M2[请求合并<br/>相似请求批量合并<br/>减少 MCP Server 负载]:::mcp
+        M3[熔断降级<br/>错误率 > 50%→熔断<br/>半开探测·逐步恢复]:::mcp
+        M4[负载均衡<br/>加权轮询·最小连接<br/>健康感知·动态调整]:::mcp
+        M5[安全校验<br/>输入过滤·权限校验<br/>速率限制·白名单]:::mcp
+    end
+
+    %% ===== 监控与遥测 =====
+    subgraph OBSERVE["可观测性（OpenTelemetry）"]
+        T1[链路追踪<br/>Trace · Span<br/>端到端时延分解]:::monitoring
+        T2[指标采集<br/>Metrics · Prometheus<br/>QPS · 错误率 · 时延]:::monitoring
+        T3[日志聚合<br/>Logs · Loki<br/>结构化 · 关联 Trace]:::monitoring
+    end
+
+    AGENT["Agent 引擎"]:::sub
+    SKILL_SYS["Skill 系统"]:::sub
+    MCP_SYS["MCP 网关"]:::sub
+
+    AGENT -->|"使用"| SKILL_OPT
+    AGENT -->|"调用"| MCP_OPT
+    SKILL_OPT -->|"加载"| SKILL_SYS
+    MCP_OPT -->|"路由"| MCP_SYS
+    SKILL_OPT -.->|"监控"| OBSERVE
+    MCP_OPT -.->|"监控"| OBSERVE
+    OBSERVE -->|"数据"| AGENT
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图14 -->
+        <div class="card fig-item" id="fig14">
+            <div class="card-header">
+                <span class="title" style="color:#22d3ee;">✨ 图14 — 会话管理与 Token 优化架构图</span>
+                <span class="badge">session-token-architecture.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 会话管理与 Token 优化架构图（4.15 + 4.16）
+%% 会话管理：6 态生命周期、上下文窗口策略、三级存储、断线恢复、多 Agent 协调
+%% Token 管理：实时监控、语义缓存、模型级联、Prompt 压缩、预算控制、成本拆分
+
+graph TB
+    classDef session fill:#06b6d4,stroke:#22d3ee,stroke-width:2px,color:#fff
+    classDef context fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef storage fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef token fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef monitor fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    subgraph LIFECYCLE["会话生命周期 — 6 态管理"]
+        L1[创建<br/>首次对话触发]:::session
+        L2[活跃<br/>持续交互]:::session
+        L3[空闲<br/>无交互·计时开始]:::session
+        L4[超时<br/>超 TTL→僵尸状态]:::session
+        L5[归档<br/>持久化到冷存储]:::session
+        L6[清理<br/>TTL 到期·不可恢复]:::session
+        L1 --> L2 --> L3 --> L4 --> L5 --> L6
+        L3 -->|"恢复"| L2
+        L4 -->|"手动续期"| L2
+    end
+
+    subgraph WINDOW["上下文窗口策略"]
+        W1[滑动窗口 FIFO<br/>保留最近 N 轮·丢弃最早]:::context
+        W2[重要性评分<br/>关键信息保留·丢弃无关]:::context
+        W3[摘要压缩<br/>超出窗口→AI 摘要→替换]:::context
+        W4[混合策略<br/>前 N 轮+摘要+重要性]:::context
+    end
+
+    subgraph STORAGE["三级存储策略"]
+        S1[Tier 1: 热存储<br/>Redis · 内存级 · ≤1ms<br/>活跃会话·最近 100 条]:::storage
+        S2[Tier 2: 温存储<br/>PostgreSQL · ≤10ms<br/>近 7 天会话·完整记录]:::storage
+        S3[Tier 3: 冷存储<br/>MinIO · ≤100ms<br/>超过 7 天·归档压缩]:::storage
+    end
+
+    subgraph RECOVERY["断线恢复与会话迁移"]
+        R1[会话快照<br/>每 N 轮保存状态]:::context
+        R2[断线检测<br/>心跳·WebSocket 重连]:::context
+        R3[会话迁移<br/>跨 Worker 转移·无缝衔接]:::context
+    end
+
+    subgraph MONITOR["Token 实时监控"]
+        M1[当前消耗<br/>实时 Token/s·今日累计]:::monitor
+        M2[历史趋势<br/>日/周/月·按模型·按用户]:::monitor
+        M3[成本分析<br/>按模型单价·按用户分摊]:::monitor
+        M4[预算告警<br/>阈值触发·控制台+邮件]:::monitor
+    end
+
+    subgraph OPTIMIZE["Token 优化策略"]
+        O1[Semantic Cache<br/>语义相似度匹配·缓存复用<br/>TTL 控制·置信度标记·可绕过]:::token
+        O2[模型级联<br/>小模型先试→大模型兜底<br/>超时上限·置信度调优]:::token
+        O3[Prompt 压缩<br/>去冗余·合并历史<br/>关键信息保留]:::token
+        O4[预算控制<br/>软上限优先·降级透明化<br/>用户/模型/时间段配额]:::token
+    end
+
+    subgraph COST["成本拆分"]
+        C1[按模型拆分<br/>GPT-4o vs Claude vs 本地]:::token
+        C2[按用户拆分<br/>管理员 vs 普通用户]:::token
+        C3[按 Agent 拆分<br/>每个 Agent 独立核算]:::token
+        C4[模型推荐矩阵<br/>价格/速度/能力综合评分]:::token
+    end
+
+    USER["用户"]:::sub
+    AGENT_E["Agent 引擎"]:::sub
+    LLM["大语言模型"]:::sub
+
+    USER -->|"开始对话"| L1
+    L2 -->|"读写上下文"| WINDOW
+    WINDOW -->|"历史"| STORAGE
+    STORAGE -->|"热->温->冷"| S1
+    S1 --> S2 --> S3
+
+    L2 -->|"断线"| R1
+    R1 -->|"快照恢复"| R2
+    R2 -->|"无缝迁移"| R3
+
+    USER -->|"消耗 Token"| MONITOR
+    MONITOR -->|"数据"| COST
+
+    AGENT_E -->|"优化 Token 消耗"| OPTIMIZE
+    OPTIMIZE -->|"Semantic Cache"| O1
+    OPTIMIZE -->|"模型级联"| O2
+    OPTIMIZE -->|"Prompt 压缩"| O3
+    OPTIMIZE -->|"预算控制"| O4
+
+    O1 -.->|"缓存命中"| LLM
+    O2 -->|"小模型先试"| LLM
+    O3 -.->|"减少 Token"| LLM
+    O4 -.->|"限流"| USER
+
+    MONITOR -->|"趋势"| COST
+    COST -->|"报告"| USER
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图15 -->
+        <div class="card fig-item" id="fig15">
+            <div class="card-header">
+                <span class="title" style="color:#22d3ee;">✨ 图15 — Token 使用管理架构图</span>
+                <span class="badge">token-management.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% Token 使用管理架构图
+graph TB
+    classDef monitor fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef optimize fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef cost fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+
+    subgraph MONITOR["Token 统计监控"]
+        M1[实时消耗]:::monitor; M2[历史趋势]:::monitor; M3[模型维度]:::monitor; M4[用户维度]:::monitor
+    end
+    subgraph OPTIMIZE["优化策略"]
+        O1[Prompt 压缩]:::optimize; O2[Semantic Cache]:::optimize; O3[内容裁剪]:::optimize; O4[模型级联]:::optimize; O5[预算控制]:::optimize
+    end
+    subgraph COST["成本控制"]
+        C1[预算告警]:::cost; C2[用量限制]:::cost; C3[降级策略]:::cost; C4[成本分摊]:::cost
+    end
+    subgraph OUT["输出"]
+        O7[Token 消耗报表]:::optimize; O8[成本分析报告]:::optimize; O9[告警记录]:::optimize
+    end
+    AGENT["Agent"]:::cost; LLM["大语言模型"]:::cost; USER["用户"]:::cost
+    AGENT --> MONITOR --> COST; AGENT --> OPTIMIZE; O1 & O2 & O3 -.-> LLM
+    O4 --> LLM; O5 --> USER; COST --> OUT --> USER
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图16 -->
+        <div class="card fig-item" id="fig16">
+            <div class="card-header">
+                <span class="title" style="color:#fb7185;">✨ 图16 — 统一监控看板架构图</span>
+                <span class="badge">dashboard-monitor.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 统一监控看板架构图（4.21）
+%% 总览大盘、实时监控曲线、单 Agent 下钻、告警管理、对比视图
+
+graph TB
+    classDef dash fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef panel fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+    classDef infra fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef alert fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+
+    subgraph OVERVIEW["总览大盘"]
+        O1[Agent 状态<br/>在线/离线/异常·总数 N]:::panel
+        O2[健康评分<br/>综合评分·红黄绿面板]:::panel
+        O3[请求量趋势<br/>今日/周/月曲线]:::panel
+        O4[Token 消耗<br/>今日·趋势·成本]:::panel
+        O5[错误率概览<br/>4xx/5xx/超时分布]:::panel
+    end
+
+    subgraph REALTIME["实时监控曲线"]
+        R1[时延曲线<br/>P50/P95/P999 实时图]:::dash
+        R2[流量面板<br/>QPS·Token/s 实时]:::dash
+        R3[资源面板<br/>CPU·内存·连接数]:::dash
+        R4[错误面板<br/>实时错误流·状态码]:::dash
+    end
+
+    subgraph DRILL["单 Agent 下钻详情"]
+        D1[基本信息<br/>状态·版本·生命周期]:::panel
+        D2[Skill 统计<br/>版本·请求量·错误率]:::panel
+        D3[MCP 状态<br/>连接·时延·调用量]:::panel
+        D4[会话详情<br/>活跃数·Token 消耗]:::panel
+        D5[操作历史<br/>变更·部署·配置时间线]:::panel
+    end
+
+    subgraph ALERT["告警管理"]
+        A1[告警规则<br/>阈值·窗口·级别·静默]:::alert
+        A2[告警检测<br/>规则匹配·聚合·抑制]:::alert
+        A3[告警通知<br/>控制台·邮件·Webhook]:::alert
+        A4[告警列表<br/>触发·确认·恢复·历史]:::alert
+    end
+
+    subgraph COMPARE["对比视图"]
+        C1[Agent 对比<br/>两 Agent 并行·雷达图]:::panel
+        C2[时段对比<br/>今日 vs 昨日 vs 上周]:::panel
+        C3[模型对比<br/>质量·成本·时延·柱状图]:::panel
+    end
+
+    subgraph CUSTOM["自定义看板"]
+        CU1[拖拽布局<br/>添加/移除/排列面板]:::panel
+        CU2[保存模板<br/>多套看板·快速切换]:::panel
+        CU3[分享导出<br/>URL·截图·PDF]:::panel
+    end
+
+    subgraph TECH["技术栈"]
+        T1[Prometheus<br/>指标采集·聚合·存储]:::infra
+        T2[Grafana<br/>可视化·面板·告警]:::infra
+        T3[Node Exporter<br/>节点指标·资源利用率]:::infra
+        T4[Custom Exporter<br/>业务指标·Agent 定制]:::infra
+        T5[Alertmanager<br/>告警路由·通知]:::infra
+    end
+
+    TECH -->|"采集指标"| OVERVIEW
+    TECH -->|"实时数据"| REALTIME
+    TECH -->|"下钻数据"| DRILL
+    TECH -->|"触发条件"| ALERT
+
+    OVERVIEW -->|"点击"| DRILL
+    OVERVIEW -->|"对比"| COMPARE
+    OVERVIEW -->|"自定义"| CUSTOM
+
+    REALTIME -->|"汇总"| OVERVIEW
+    ALERT -->|"推送"| OVERVIEW
+    ALERT -->|"通知"| DRILL
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图17 -->
+        <div class="card fig-item" id="fig17">
+            <div class="card-header">
+                <span class="title" style="color:#fb7185;">✨ 图17 — 运维/备份/健康监控架构图</span>
+                <span class="badge">ops-backup-health.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 自动化运维 + 备份恢复 + 健康监控架构图（4.22 + 4.23 + 4.24）
+%% 自动部署、Auto Scaling、日志管理、备份恢复、四级健康检查、异常自愈
+
+graph TB
+    classDef ops fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef backup fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef health fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef infra fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef panel fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    subgraph DEPLOY["自动部署"]
+        D1[YAML 模板<br/>CPU·内存·Agent·Skill·MCP]:::ops
+        D2[声明式 API<br/>POST /api/v1/deploy]:::ops
+        D3[依赖解析<br/>自动安装·配置注入]:::ops
+        D4[上线验证<br/>健康检查通过→上线]:::ops
+    end
+
+    subgraph SCALING["Auto Scaling"]
+        S1[监控指标<br/>QPS·CPU·内存·队列]:::ops
+        S2[扩容规则<br/>超阈值→+实例·冷却期]:::ops
+        S3[缩容规则<br/>低负载→-实例·保基准]:::ops
+        S4[渐变操作<br/>每次±1·≥5 分钟间隔]:::ops
+    end
+
+    subgraph LOG["日志管理"]
+        L1[日志采集<br/>Filebeat → Loki]:::infra
+        L2[日志存储<br/>Loki 聚合·压缩]:::infra
+        L3[日志检索<br/>Grafana Explore]:::infra
+        L4[日志清理<br/>过期删除·保留策略]:::infra
+    end
+
+    subgraph HEALTH["4 级健康检查"]
+        H1[L1 存活检查<br/>进程·端口·响应]:::health
+        H2[L2 就绪检查<br/>初始化·依赖就绪]:::health
+        H3[L3 能力检查<br/>功能测试·正常响应]:::health
+        H4[L4 端到端检查<br/>完整链路·真实场景]:::health
+        H5[健康评分<br/>分数=权重×归一化指标<br/>≥90绿·≥60黄·≤60红]:::health
+    end
+
+    subgraph HEAL["异常自愈"]
+        HL1[异常检测<br/>错误率·时延·断连]:::ops
+        HL2[自愈策略<br/>重启·回滚·重建·切备用]:::ops
+        HL3[自愈执行<br/>自动·记录·升级人类]:::ops
+    end
+
+    subgraph BACKUP["备份"]
+        B1[全量备份<br/>每日·完整快照]:::backup
+        B2[增量备份<br/>每 6 小时·变更数据]:::backup
+        B3[事件触发<br/>关键变更前·配置更新]:::backup
+        B4[加密存储<br/>AES-256·SHA-256·异地]:::backup
+    end
+
+    subgraph RESTORE["恢复"]
+        R1[一键恢复<br/>按时间点·最新可用]:::backup
+        R2[部分恢复<br/>指定组件恢复]:::backup
+        R3[恢复验证<br/>校验和·一致性]:::backup
+        R4[恢复演练<br/>季度·报告]:::backup
+    end
+
+    AGENT["Agent 引擎"]:::panel
+    MONITOR["监控看板"]:::panel
+
+    DEPLOY -->|"部署"| AGENT
+    SCALING -->|"弹性"| AGENT
+    SCALING -.->|"指标"| DEPLOY
+
+    LOG -.->|"采集"| AGENT & DEPLOY & SCALING
+
+    HEALTH -->|"L1-L4 检查"| AGENT
+    HEALTH -->|"评分"| MONITOR
+
+    HEAL -->|"恢复"| AGENT
+    HEAL -.->|"触发"| SCALING
+
+    BACKUP -->|"备份"| AGENT
+    RESTORE -->|"恢复"| AGENT
+    RESTORE -.->|"验证"| BACKUP
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图18 -->
+        <div class="card fig-item" id="fig18">
+            <div class="card-header">
+                <span class="title" style="color:#fb7185;">✨ 图18 — 操作审计与记忆管理架构图</span>
+                <span class="badge">audit-memory.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 操作审计与记忆管理架构图（4.25 + 4.1.5）
+%% 四维审计、哈希链防篡改、SIEM 集成、三层记忆、脱敏与 GDPR
+
+graph TB
+    classDef audit fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef memory fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef store fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef security fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef panel fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    subgraph AUDIT["操作审计 — 4 维范围"]
+        A1[用户操作审计<br/>登录·配置·权限·CRUD]:::audit
+        A2[Agent 操作审计<br/>创建·部署·绑定·会话]:::audit
+        A3[系统操作审计<br/>配置·升级·备份·伸缩]:::audit
+        A4[安全操作审计<br/>密钥轮换·API Key·权限]:::audit
+    end
+
+    subgraph STORE["审计存储"]
+        S1[追加写日志<br/>Append Only·不可篡改]:::store
+        S2[哈希链<br/>SHA-256（上笔哈希+本笔内容）]:::security
+        S3[冷热分离<br/>ES（90 天）→MinIO（180 天+）]:::store
+    end
+
+    subgraph QUERY["审计查询"]
+        Q1[多维搜索<br/>时间·操作者·类型·资源·结果]:::panel
+        Q2[JSON diff<br/>变更前后对比·颜色标注]:::panel
+        Q3[SIEM 集成<br/>CEF/JSON/Syslog·Splunk/QRadar]:::security
+        Q4[合规报告<br/>PDF 导出·180 天存档]:::panel
+    end
+
+    subgraph MEMORY["三层记忆管理"]
+        M1[短期记忆<br/>Redis<br/>当前会话·最近N轮·≤1ms]:::memory
+        M2[长期记忆<br/>向量数据库<br/>历史总结·重要性评分·≤50ms]:::memory
+        M3[共享记忆<br/>PostgreSQL<br/>多 Agent 协同·协作上下文·≤10ms]:::memory
+    end
+
+    subgraph UI["记忆管理界面"]
+        U1[记忆查看<br/>按时间/Agent/类型检索]:::panel
+        U2[记忆搜索<br/>全文搜索·向量搜索]:::panel
+        U3[记忆清理<br/>批量删除·按策略清理]:::panel
+        U4[记忆脱敏<br/>敏感信息·GDPR 合规]:::security
+        U5[记忆分析<br/>词云·高频主题·趋势]:::panel
+    end
+
+    AUDIT -->|"产生审计记录"| STORE
+    STORE -->|"检索"| QUERY
+    QUERY -->|"展示"| AUDIT
+
+    M1 -->|"短期·低时延"| AGENT_E["Agent 引擎"]:::panel
+    M2 -->|"长期·向量化"| KB["知识库引擎"]:::panel
+    M3 -->|"共享·协同"| COLLAB["协作引擎"]:::panel
+
+    MEMORY -->|"管理"| UI
+    UI -->|"脱敏"| SECURE["GDPR 合规"]:::security
+
+    MEMORY -.->|"重要性遗忘"| M2
+    MEMORY -.->|"自动清理"| M1
+                </pre>
+            </div>
+        </div>
+
+        <!-- 图19 -->
+        <div class="card fig-item" id="fig19">
+            <div class="card-header">
+                <span class="title" style="color:#fbbf24;">✨ 图19 — Skill/MCP 批量安装与共享架构图（v1.6新增）</span>
+                <span class="badge">skill-mcp-sharing.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% Skill/MCP 批量安装与跨 Agent 共享架构图（4.3.5 + 4.4.6 + 4.5.7）
+%% 批量安装队列、三种复用方式、引用关系图、变更通知、共享权限、安装报告
+
+graph TB
+    classDef market fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef queue fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef install fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef share fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef notify fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef agent fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef panel fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    subgraph MARKET["Skill/MCP 在线市场"]
+        SKILL_MKT[Skill 仓库<br/>分类·版本·依赖信息]:::market
+        MCP_MKT[MCP 仓库<br/>类型·协议·能力声明]:::market
+    end
+
+    subgraph QUEUE["批量安装队列"]
+        Q1[选择目标组件<br/>多选 Skill/MCP]:::queue
+        Q2[选择目标 Agent<br/>批量勾选·按标签选择]:::queue
+        Q3[依赖预检<br/>检查所有目标兼容性]:::queue
+        Q4[批量执行<br/>并行安装·进度追踪]:::queue
+        Q5[安装报告<br/>成功·失败·跳过明细]:::queue
+    end
+
+    subgraph SKILL_REUSE["Skill 跨 Agent 复用 — 3 种方式"]
+        SR1[直接引用<br/>所有 Agent 指向同一 Skill 实例<br/>✓ 节省存储·统一管理<br/>⚠ 变更影响全部引用者]:::share
+        SR2[复制副本<br/>每个 Agent 拥有独立副本<br/>✓ 独立管理·互不影响<br/>⚠ 占用更多存储]:::share
+        SR3[模板实例化<br/>从模板创建独立实例<br/>✓ 继承配置·可个性化<br/>⚠ 模板变更手动同步]:::share
+    end
+
+    subgraph MCP_SYNC["MCP 跨 Agent 同步 — 3 种方式"]
+        MR1[直接引用<br/>共享 MCP 配置<br/>变更自动传播]:::share
+        MR2[复制配置<br/>独立配置文件<br/>手动同步]:::share
+        MR3[模板化<br/>MCP 配置模板<br/>批量生成·可覆盖]:::share
+    end
+
+    subgraph RELATION["引用关系图"]
+        REF1[Agent A → Skill web-search（引用）]:::panel
+        REF2[Agent B → Skill web-search（引用）]:::panel
+        REF3[Agent C → Skill web-search（副本 v1.0）]:::panel
+        REF4[Agent D → Skill web-search（模板 web-v2）]:::panel
+        REF5[Agent A + B ← 变更通知]:::notify
+    end
+
+    subgraph NOTIFY["变更通知机制"]
+        N1[版本更新事件<br/>市场发布新版本]:::notify
+        N2[变更类型<br/>Minor 自动兼容·Major 需确认]:::notify
+        N3[通知方式<br/>控制台标记·消息·邮件]:::notify
+        N4[用户操作<br/>确认更新·忽略·查看 diff]:::notify
+    end
+
+    subgraph SCOPE["共享范围权限"]
+        SC1[私有<br/>仅创建者使用]:::panel
+        SC2[团队<br/>团队内成员可用]:::panel
+        SC3[全局<br/>所有用户可用]:::panel
+    end
+
+    subgraph REPORT["安装进度与报告"]
+        R1[安装进度条<br/>总进度·当前状态]:::panel
+        R2[成功列表<br/>组件→Agent 映射]:::panel
+        R3[失败列表<br/>原因·重试·跳过]:::panel
+        R4[详细日志<br/>每步详情·时间戳]:::panel
+    end
+
+    A1[Agent 引擎 A]:::agent
+    A2[Agent 引擎 B]:::agent
+    A3[Agent 引擎 C]:::agent
+    A4[Agent 引擎 N]:::agent
+
+    SKILL_MKT -->|"批量安装"| Q1
+    MCP_MKT -->|"批量安装"| Q1
+    Q1 --> Q2 --> Q3 --> Q4 --> Q5
+
+    Q4 -->|"批量分配 Skill"| SKILL_REUSE
+    Q4 -->|"批量注册 MCP"| MCP_SYNC
+
+    SKILL_REUSE -->|"直接引用"| A1
+    SKILL_REUSE -->|"复制副本"| A2
+    SKILL_REUSE -->|"模板实例化"| A3
+    SKILL_REUSE -->|"多种方式混合"| A4
+
+    MCP_SYNC -->|"直接引用"| A1
+    MCP_SYNC -->|"复制配置"| A2
+    MCP_SYNC -->|"模板化"| A3
+
+    RELATION -.->|"展示"| A1
+    RELATION -.->|"展示"| A2
+    RELATION -.->|"展示"| A3
+    RELATION -.->|"展示"| A4
+    NOTIFY -->|"通知"| A1
+    NOTIFY -->|"通知"| A2
+    NOTIFY -->|"通知"| A3
+    NOTIFY -->|"通知"| A4
+    SCOPE -->|"控制"| SKILL_REUSE
+    SCOPE -->|"控制"| MCP_SYNC
+    Q5 -->|"输出"| REPORT
+                </pre>
+            </div>
+        </div>
+
+        <!-- ===== 图20 — 操作审计架构图 ===== -->
+        <div class="card fig-item" id="fig20">
+            <div class="card-header">
+                <span class="title">📋 图20 — 操作审计架构图</span>
+                <span class="badge">audit-management.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 操作审计架构图
+graph TB
+    classDef audit fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef store fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef query fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef alert fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+
+    subgraph AUDIT["统一操作审计层"]
+        A1[用户行为审计<br/>登录/登出/配置变更]:::audit
+        A2[Agent 操作审计<br/>创建/部署/更新/删除]:::audit
+        A3[Skill 操作审计<br/>安装/卸载/版本切换]:::audit
+        A4[MCP 操作审计<br/>注册/配置/调用]:::audit
+        A5[系统操作审计<br/>权限/密钥/备份/升级]:::audit
+    end
+
+    subgraph CAPTURE["采集与存储"]
+        C1[事件采集器<br/>异步·队列·批量写入]:::store
+        C2[审计日志存储<br/>Append-Only·不可篡改]:::store
+        C3[哈希链校验<br/>SHA-256 防篡改]:::store
+        C4[冷热分离<br/>ES 90天·MinIO 180天]:::store
+    end
+
+    subgraph QUERY["审计查询与分析"]
+        Q1[多维检索<br/>时间/操作者/类型/资源]:::query
+        Q2[变更对比<br/>JSON Diff · 颜色标注]:::query
+        Q3[审计报表<br/>PDF · CSV · 合规报告]:::query
+        Q4[SIEM 集成<br/>CEF · JSON · Syslog]:::alert
+    end
+
+    subgraph ALERT["告警与通知"]
+        AL1[异常检测<br/>敏感操作·高频失败]:::alert
+        AL2[实时告警<br/>控制台·消息·邮件]:::alert
+        AL3[告警规则<br/>自定义阈值·白名单]:::alert
+    end
+
+    AUDIT -->|"产生事件"| CAPTURE
+    CAPTURE -->|"存储"| C2
+    C2 -->|"哈希校验"| C3
+    C3 -->|"归档"| C4
+    CAPTURE -->|"检索"| QUERY
+    QUERY -->|"异常"| ALERT
+    ALERT -->|"通知"| AUDIT
+                </pre>
+            </div>
+        </div>
+
+        <!-- ===== 图21 — 自动化运维与备份恢复架构图 ===== -->
+        <div class="card fig-item" id="fig21">
+            <div class="card-header">
+                <span class="title">⚙️ 图21 — 自动化运维与备份恢复架构图</span>
+                <span class="badge">automation-ops-backup.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 自动化运维与备份恢复架构图
+graph TB
+    classDef ops fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef deploy fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef backup fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef heal fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+
+    subgraph OPS["自动化运维"]
+        O1[自动部署<br/>YAML 模板·声明式 API]:::ops
+        O2[Auto Scaling<br/>QPS/CPU 触发·冷却期]:::ops
+        O3[日志管理<br/>Filebeat → Loki → Grafana]:::ops
+        O4[资源监控<br/>CPU/内存/磁盘/网络]:::ops
+    end
+
+    subgraph BACKUP["备份管理"]
+        B1[全量备份<br/>每日·完整快照]:::backup
+        B2[增量备份<br/>每 6 小时·变更数据]:::backup
+        B3[事件触发备份<br/>关键变更前自动快照]:::backup
+        B4[加密存储<br/>AES-256 · SHA-256 · 异地]:::backup
+    end
+
+    subgraph RESTORE["恢复管理"]
+        R1[一键恢复<br/>按时间点·最新可用]:::backup
+        R2[部分恢复<br/>指定 Agent/Skill/MCP]:::backup
+        R3[恢复验证<br/>校验和·一致性]:::backup
+        R4[恢复演练<br/>季度·自动化·报告]:::backup
+    end
+
+    subgraph HEAL["异常自愈"]
+        H1[异常检测<br/>错误率/时延/断连]:::heal
+        H2[自愈策略<br/>重启·回滚·重建·切备用]:::heal
+        H3[升级通知<br/>确认更新·忽略·查看 diff]:::heal
+    end
+
+    OPS -->|"部署"| AGENT_E["Agent 引擎"]:::ops
+    AGENT_E -->|"备份"| BACKUP
+    BACKUP -.->|"恢复"| RESTORE
+    RESTORE -->|"验证"| AGENT_E
+    HEAL -->|"自动"| AGENT_E
+    HEAL -->|"告警"| OPS
+    OPS -.->|"监控"| HEAL
+                </pre>
+            </div>
+        </div>
+
+        <!-- ===== 图22 — 监控看板与健康检查架构图 ===== -->
+        <div class="card fig-item" id="fig22">
+            <div class="card-header">
+                <span class="title">📊 图22 — 监控看板与健康检查架构图</span>
+                <span class="badge">monitoring-health-architecture.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 监控看板与健康检查架构图
+graph TB
+    classDef dash fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef health fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef alert fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef infra fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+
+    subgraph DASH["监控看板"]
+        D1[总览大盘<br/>Agent 状态·健康评分·请求量]:::dash
+        D2[实时曲线<br/>时延 P50/P95/P999 · QPS]:::dash
+        D3[下钻详情<br/>单 Agent·Skill·MCP·会话]:::dash
+        D4[对比视图<br/>Agent 对比·时段对比·模型对比]:::dash
+    end
+
+    subgraph HEALTH["四级健康检查"]
+        H1[L1 存活检查<br/>进程·端口·响应]:::health
+        H2[L2 就绪检查<br/>初始化·依赖就绪]:::health
+        H3[L3 能力检查<br/>功能测试·正常响应]:::health
+        H4[L4 端到端检查<br/>完整链路·真实场景]:::health
+        H5[健康评分<br/>≥90 绿 · ≥60 黄 · ≤60 红]:::health
+    end
+
+    subgraph ALERT["告警管理"]
+        A1[告警规则<br/>阈值·窗口·级别]:::alert
+        A2[告警检测<br/>规则匹配·聚合·抑制]:::alert
+        A3[告警通知<br/>控制台·邮件·Webhook]:::alert
+        A4[告警列表<br/>触发·确认·恢复·历史]:::alert
+    end
+
+    subgraph TECH["技术栈"]
+        T1[Prometheus<br/>指标采集·聚合]:::infra
+        T2[Grafana<br/>可视化·面板·告警]:::infra
+        T3[Alertmanager<br/>告警路由·通知]:::infra
+        T4[Node Exporter<br/>节点指标]:::infra
+    end
+
+    HEALTH -->|"评分"| DASH
+    TECH -->|"指标"| DASH
+    DASH -->|"异常"| ALERT
+    ALERT -->|"告警"| HEALTH
+    TECH -->|"触发"| ALERT
+                </pre>
+            </div>
+        </div>
+
+        <!-- ===== 图23 — 多智能体协作引擎架构图 ===== -->
+        <div class="card fig-item" id="fig23">
+            <div class="card-header">
+                <span class="title">🤝 图23 — 多智能体协作引擎架构图</span>
+                <span class="badge">collaboration-architecture.mmd</span>
+            </div>
+            <div class="card-body">
+                <pre class="mermaid" style="text-align:left;">
+%% 多智能体协作引擎架构图
+graph TB
+    classDef mode fill:#06b6d4,stroke:#22d3ee,stroke-width:2px,color:#fff
+    classDef task fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef comm fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef role fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef result fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+
+    subgraph MODES["5 种协作模式"]
+        M1[Supervisor 模式<br/>主 Agent 分配·监督执行]:::mode
+        M2[Team 模式<br/>角色分工·平等协作]:::mode
+        M3[管道链模式<br/>串行处理·前输出=后输入]:::mode
+        M4[辩论投票模式<br/>多 Agent 辩论·投票决策]:::mode
+        M5[市场竞争模式<br/>多方案竞争·择优选用]:::mode
+    end
+
+    subgraph TASK["任务分解与分配"]
+        T1[任务接收器<br/>解析用户请求]:::task
+        T2[任务分解器 DAG<br/>依赖图·拓扑排序]:::task
+        T3[分配器<br/>专长匹配·动态分配]:::task
+        T4[执行跟踪器<br/>进度·超时·重试]:::task
+    end
+
+    subgraph COMM["通信与共享黑板"]
+        C1[消息协议<br/>JSON-RPC]:::comm
+        C2[共享黑板<br/>Redis·中间结果·上下文]:::comm
+        C3[锁与并发<br/>读写锁·任务锁]:::comm
+    end
+
+    subgraph ROLE["角色与分工"]
+        R1[角色模板库<br/>预定义角色·能力描述]:::role
+        R2[专长注册表<br/>Agent 能力注册·检索]:::role
+        R3[信誉评分<br/>历史表现·成功率]:::role
+        R4[动态分配<br/>运行时按需调整]:::role
+    end
+
+    subgraph AGG["结果聚合"]
+        A1[结果收集器<br/>汇总所有子结果]:::result
+        A2[冲突检测<br/>矛盾识别·标记]:::result
+        A3[投票机制<br/>加权投票·多数决]:::result
+        A4[最终输出<br/>格式化·返回用户]:::result
+    end
+
+    USER["用户"]:::mode
+    USER --> T1 --> T2 --> T3 --> T4
+    T4 --> MODES
+    MODES --> C2
+    C2 -.-> MODES
+    ROLE --> T3
+    MODES --> ROLE
+    MODES --> A1 --> A2 --> A3 --> A4 --> USER
+                </pre>
+            </div>
+        </div>
+    </div>
+
+    </div>
+
+    <!-- ===== 图24 — 模型配置模板与一键复用 ===== -->
+    <div class="card fig-item" id="fig24">
+        <div class="card-header">
+            <span class="title">📐 图24 — 模型配置模板与一键复用架构图（v1.7）</span>
+            <span class="badge">model-config-template.mmd</span>
+        </div>
+        <div class="card-body">
+            <pre class="mermaid" style="text-align:left;">
+%% 模型配置模板与一键复用架构图
+graph TB
+    classDef core fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef agent fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef template fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef version fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef route fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+
+    subgraph CENTER["模型配置管理中心"]
+        TEMPLATE["模型配置模板<br/>Provider · API Key · Endpoint<br/>模型名称 · 默认参数"]:::template
+        CATEGORY["模板分类<br/>对话模型 · 嵌入模型<br/>代码模型 · 按 Provider"]:::template
+        TEST["连接测试<br/>验证可用性 · 测试响应"]:::template
+    end
+
+    subgraph AGENTS["多 Agent 绑定"]
+        AG1["Agent A<br/>对话助手<br/>继承全部参数"]:::agent
+        AG2["Agent B<br/>代码生成器<br/>覆盖 Temperature=0.1"]:::agent
+        AG3["Agent C<br/>翻译助手<br/>覆盖 Max Tokens=4096"]:::agent
+        AG4["Agent D<br/>数据分析<br/>继承全部参数"]:::agent
+    end
+
+    subgraph VERSION["版本管理"]
+        V1["v1.0<br/>初始版本"]:::version
+        V2["v1.1<br/>修改 API Key"]:::version
+        V3["v1.2<br/>切换模型名称"]:::version
+        VN["历史版本<br/>对比 · 回滚"]:::version
+    end
+
+    subgraph SYNC["同步策略"]
+        S1["变更通知<br/>检测关联 Agent"]:::template
+        S2["自动同步<br/>灰度推送 · 分批"]:::template
+        S3["跳过<br/>保持当前版本"]:::template
+        S4["批量确认<br/>一键全部更新"]:::template
+    end
+
+    subgraph ROUTE["与模型路由协同"]
+        R1["路由策略 A<br/>低成本优先<br/>公用同一模板"]:::route
+        R2["路由策略 B<br/>高性能优先<br/>公用同一模板"]:::route
+    end
+
+    TEMPLATE -->|"绑定"| AGENTS
+    TEMPLATE -->|"版本管理"| VERSION
+    VERSION -->|"变更"| SYNC
+    SYNC -->|"同步到"| AGENTS
+    TEMPLATE -->|"参与"| ROUTE
+    CATEGORY -->|"分类"| TEMPLATE
+    TEST -->|"验证"| TEMPLATE
+            </pre>
+        </div>
+    </div>
+
+    <!-- ===== 图25 — 数据库 ER 关系图 ===== -->
+    <div class="card fig-item" id="fig25">
+        <div class="card-header">
+            <span class="title">📐 图25 — 数据库 ER 关系图（v1.8）</span>
+            <span class="badge">er-diagram.mmd</span>
+        </div>
+        <div class="card-body">
+            <pre class="mermaid" style="text-align:left;">
+erDiagram
+    USER ||--o{ WORKSPACE : "拥有"
+    WORKSPACE ||--o{ AGENT : "包含"
+    WORKSPACE ||--o{ MODEL_CONFIG_TEMPLATE : "管理"
+    WORKSPACE ||--o{ SKILL : "管理"
+    WORKSPACE ||--o{ MCP : "管理"
+    USER ||--o{ AUDIT_LOG : "产生"
+    AGENT ||--o{ AGENT_CONFIG : "配置历史"
+    AGENT ||--o{ AGENT_MODEL_BINDING : "绑定"
+    AGENT ||--o{ AGENT_SKILL : "拥有"
+    AGENT ||--o{ AGENT_MCP : "注册"
+    AGENT ||--o{ SESSION : "对话"
+    AGENT ||--o{ AGENT_MEMORY : "记忆"
+    AGENT ||--o{ HEALTH_CHECK : "健康检查"
+    MODEL_CONFIG_TEMPLATE ||--o{ MODEL_CONFIG_VERSION : "版本管理"
+    MODEL_CONFIG_TEMPLATE ||--o{ AGENT_MODEL_BINDING : "被绑定"
+    SKILL ||--o{ AGENT_SKILL : "被安装"
+    MCP ||--o{ AGENT_MCP : "被注册"
+    SESSION ||--o{ SESSION_MESSAGE : "包含"
+            </pre>
+        </div>
+    </div>
+
+    <!-- ===== 图26 — 核心数据流总图 ===== -->
+    <div class="card fig-item" id="fig26">
+        <div class="card-header">
+            <span class="title">📐 图26 — 核心数据流总图（v1.8）</span>
+            <span class="badge">data-flow-overview.mmd</span>
+        </div>
+        <div class="card-body">
+            <pre class="mermaid" style="text-align:left;">
+flowchart LR
+    subgraph INPUT["输入层"]
+        USER[用户操作]
+        SCAN[定时扫描器]
+    end
+    subgraph API["API/WS 网关"]
+        REST[REST API]
+        WS[WebSocket]
+    end
+    subgraph CORE["核心业务层"]
+        AGENT[Agent 服务]
+        MODEL[模型模板服务]
+        SKILL[Skill 服务]
+        CHAT[对话引擎]
+        COLLAB[协作引擎]
+    end
+    subgraph DATA["数据层"]
+        PG[(PostgreSQL)]
+        REDIS[(Redis)]
+        QD[(Qdrant)]
+        MINIO[(MinIO)]
+    end
+    subgraph OBS["可观测性"]
+        PROM[Prometheus]
+        GRAF[Grafana]
+        AUDIT[审计日志]
+    end
+    INPUT --> API
+    API --> CORE
+    CORE --> DATA
+    CORE -.->|"指标"| OBS
+            </pre>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>📁 本地路径：D:\智能体管理\plan\architecture\</p>
+        <p>v1.8 — 更新于 2026-07-26 | 含 26 张架构设计图</p>
+    </div>
+
+    <script>
+        // 搜索过滤功能
+        document.addEventListener('DOMContentLoaded', function() {
+            var searchBox = document.getElementById('searchBox');
+            if (searchBox) {
+                searchBox.addEventListener('input', function(e) {
+                    var q = e.target.value.toLowerCase();
+                    document.querySelectorAll('.fig-item').forEach(function(item) {
+                        var title = item.querySelector('.card-header .title').textContent.toLowerCase();
+                        var badge = item.querySelector('.card-header .badge').textContent.toLowerCase();
+                        item.style.display = (title.includes(q) || badge.includes(q)) ? '' : 'none';
+                    });
+                });
+            }
+        });
+
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                fontFamily: 'Microsoft YaHei, Arial, sans-serif',
+                primaryColor: '#6366f1',
+                primaryTextColor: '#ffffff',
+                primaryBorderColor: '#4f46e5',
+                lineColor: '#94a3b8',
+                secondaryColor: '#1e293b',
+                tertiaryColor: '#0f172a',
+                background: '#0f172a'
+            },
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: false,
+                curve: 'basis'
+            },
+            securityLevel: 'loose'
+        });
+    </script>
+</body>
+</html>

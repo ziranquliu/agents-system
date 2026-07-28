@@ -1,0 +1,99 @@
+%% 模型在线市场架构图
+%% 模型分类、本地/云端对比、一键接入、测试连接、模型路由与故障转移
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef header fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef local fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef cloud fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef embed fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef img fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef flow fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef route fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef compare fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef user fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    %% ===== 市场主页与分类 =====
+    subgraph HOME["模型市场首页"]
+        NAV[分类导航<br/>本地·云端·嵌入·图像]:::sub
+        SEARCH[搜索筛选<br/>参数·厂商·能力]:::sub
+        COMPARE[模型对比<br/>价格·速度·能力·硬件]:::compare
+    end
+
+    %% ===== 本地模型分类 =====
+    subgraph LOCAL["本地模型（Ollama/vLLM/llama.cpp）"]
+        L1[DeepSeek-R1/V3<br/>671B MoE · 推理极强]:::local
+        L2[Qwen2.5<br/>7B/14B/72B · 中文优秀]:::local
+        L3[Llama 3.1<br/>8B/70B · 社区最丰富]:::local
+        L4[Mistral/Mixtral<br/>7B/8x7B · 高效推理]:::local
+        L5[Phi-3<br/>mini/small/medium · 小体积]:::local
+        L6[GLM-4<br/>9B · 中文·工具调用]:::local
+        L7[Yi 1.5<br/>6B/9B/34B · 数学好]:::local
+        L8[Gemma 2<br/>2B/9B/27B · 高安全]:::local
+    end
+
+    %% ===== 云端 API 分类 =====
+    subgraph CLOUD["云端 API"]
+        C1[GPT-4o / 4o-mini<br/>OpenAI · 全能旗舰]:::cloud
+        C2[Claude 3.5 Sonnet/Haiku<br/>Anthropic · 代码/推理]:::cloud
+        C3[Gemini 1.5 Pro/Flash<br/>Google · 100万上下文]:::cloud
+        C4[DeepSeek API<br/>深度求索 · 高性价比]:::cloud
+        C5[GLM-4 API<br/>智谱 · 中文优化]:::cloud
+        C6[Spark API<br/>讯飞 · 教育场景]:::cloud
+        C7[Doubao API<br/>豆包 · 多模态]:::cloud
+        C8[Wenxin API<br/>百度 · 企业级]:::cloud
+    end
+
+    %% ===== 接入配置流程 =====
+    subgraph SETUP["一键接入流程"]
+        S1[① 选择模型]:::sub
+        S2_LOCAL["② 本地模型<br/>部署方式·地址·名称"]:::flow
+        S2_CLOUD["② 云端 API<br/>API Key·Endpoint·版本"]:::flow
+        S3["③ 测试连接<br/>验证可用性"]:::flow
+        S4["④ 自动注册<br/>加入已接入列表"]:::flow
+    end
+
+    %% ===== 路由策略 =====
+    subgraph ROUTE["模型路由与故障转移"]
+        R1[优先级路由<br/>主→备→次]:::route
+        R2[负载均衡<br/>权重分配]:::route
+        R3[成本优先<br/>低成本→高质量]:::route
+        R4[区域路由<br/>就近接入]:::route
+    end
+
+    %% ===== 监控 =====
+    subgraph MON["使用监控"]
+        M1[延迟监控<br/>Token/s·首 Token]:::sub
+        M2[错误率<br/>超时·限流]:::sub
+        M3[成本统计<br/>每日/每月]:::sub
+        M4[自动告警<br/>不可用通知]:::sub
+    end
+
+    %% ===== 外部角色 =====
+    USER["用户/管理员"]:::user
+    AGENT["Agent 引擎"]:::header
+
+    %% ===== 连接关系 =====
+    USER -->|"浏览"| HOME
+    HOME -->|"查看本地模型"| LOCAL
+    HOME -->|"查看云端 API"| CLOUD
+    HOME -->|"对比模型"| COMPARE
+
+    LOCAL -->|"接入"| SETUP
+    CLOUD -->|"接入"| SETUP
+    SETUP -->|"选择"| S1
+    S1 -->|"本地"| S2_LOCAL
+    S1 -->|"云端"| S2_CLOUD
+    S2_LOCAL -->|"填写"| S3
+    S2_CLOUD -->|"填写"| S3
+    S3 -->|"通过"| S4
+
+    S4 -->|"设置路由"| ROUTE
+    ROUTE -->|"绑定"| AGENT
+    S4 -->|"直接绑定"| AGENT
+
+    ROUTE -->|"监控"| MON
+    AGENT -.->|"调用"| LOCAL
+    AGENT -.->|"调用"| CLOUD
+    MON -.->|"反馈"| USER

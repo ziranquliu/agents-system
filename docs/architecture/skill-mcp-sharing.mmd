@@ -1,0 +1,107 @@
+%% Skill/MCP 批量安装与跨 Agent 共享架构图（4.3.5 + 4.4.6 + 4.5.7）
+%% 批量安装队列、三种复用方式、引用关系图、变更通知、共享权限、安装报告
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef market fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef queue fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef install fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef share fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef notify fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef agent fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef panel fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    %% ===== 市场和批量安装队列 =====
+    subgraph MARKET["Skill/MCP 在线市场"]
+        SKILL_MKT[Skill 仓库<br/>分类·版本·依赖信息]:::market
+        MCP_MKT[MCP 仓库<br/>类型·协议·能力声明]:::market
+    end
+
+    subgraph QUEUE["批量安装队列"]
+        Q1[选择目标组件<br/>多选 Skill/MCP]:::queue
+        Q2[选择目标 Agent<br/>批量勾选·按标签选择]:::queue
+        Q3[依赖预检<br/>检查所有目标兼容性]:::queue
+        Q4[批量执行<br/>并行安装·进度追踪]:::queue
+        Q5[安装报告<br/>成功·失败·跳过明细]:::queue
+    end
+
+    %% ===== Skill 三种复用方式 =====
+    subgraph SKILL_REUSE["Skill 跨 Agent 复用 — 3 种方式"]
+        SR1[直接引用<br/>所有 Agent 指向同一 Skill 实例<br/>✓ 节省存储·统一管理<br/>⚠ 变更影响全部引用者]:::share
+        SR2[复制副本<br/>每个 Agent 拥有独立副本<br/>✓ 独立管理·互不影响<br/>⚠ 占用更多存储]:::share
+        SR3[模板实例化<br/>从模板创建独立实例<br/>✓ 继承配置·可个性化<br/>⚠ 模板变更手动同步]:::share
+    end
+
+    %% ===== MCP 三种同步方式 =====
+    subgraph MCP_SYNC["MCP 跨 Agent 同步 — 3 种方式"]
+        MR1[直接引用<br/>共享 MCP 配置<br/>变更自动传播]:::share
+        MR2[复制配置<br/>独立配置文件<br/>手动同步]:::share
+        MR3[模板化<br/>MCP 配置模板<br/>批量生成·可覆盖]:::share
+    end
+
+    %% ===== 引用关系图 =====
+    subgraph RELATION["引用关系图"]
+        REF1[Agent A → Skill web-search（引用）]:::panel
+        REF2[Agent B → Skill web-search（引用）]:::panel
+        REF3[Agent C → Skill web-search（副本 v1.0）]:::panel
+        REF4[Agent D → Skill web-search（模板 web-v2）]:::panel
+        REF5[Agent A + B ← 变更通知]:::notify
+    end
+
+    %% ===== 变更通知机制 =====
+    subgraph NOTIFY["变更通知机制"]
+        N1[版本更新事件<br/>市场发布新版本]:::notify
+        N2[变更类型<br/>Minor 自动兼容·Major 需确认]:::notify
+        N3[通知方式<br/>控制台标记·消息·邮件]:::notify
+        N4[用户操作<br/>确认更新·忽略·查看 diff]:::notify
+    end
+
+    %% ===== 共享范围权限 =====
+    subgraph SCOPE["共享范围权限"]
+        SC1[私有<br/>仅创建者使用]:::panel
+        SC2[团队<br/>团队内成员可用]:::panel
+        SC3[全局<br/>所有用户可用]:::panel
+    end
+
+    %% ===== 安装报告 =====
+    subgraph REPORT["安装进度与报告"]
+        R1[安装进度条<br/>总进度·当前状态]:::panel
+        R2[成功列表<br/>组件→Agent 映射]:::panel
+        R3[失败列表<br/>原因·重试·跳过]:::panel
+        R4[详细日志<br/>每步详情·时间戳]:::panel
+    end
+
+    %% ===== Agent =====
+    A1[Agent 引擎 A]:::agent
+    A2[Agent 引擎 B]:::agent
+    A3[Agent 引擎 C]:::agent
+    A4[Agent 引擎 N]:::agent
+
+    %% ===== 连接关系 =====
+    SKILL_MKT -->|"批量安装"| Q1
+    MCP_MKT -->|"批量安装"| Q1
+    Q1 --> Q2 --> Q3 --> Q4 --> Q5
+
+    Q4 -->|"批量分配 Skill"| SKILL_REUSE
+    Q4 -->|"批量注册 MCP"| MCP_SYNC
+
+    SKILL_REUSE -->|"直接引用"| A1
+    SKILL_REUSE -->|"复制副本"| A2
+    SKILL_REUSE -->|"模板实例化"| A3
+    SKILL_REUSE -->|"多种方式混合"| A4
+
+    MCP_SYNC -->|"直接引用"| A1
+    MCP_SYNC -->|"复制配置"| A2
+    MCP_SYNC -->|"模板化"| A3
+
+    RELATION -.->|"展示"| A1
+    RELATION -.->|"展示"| A2
+    RELATION -.->|"展示"| A3
+    RELATION -.->|"展示"| A4
+    NOTIFY -->|"通知"| A1
+    NOTIFY -->|"通知"| A2
+    NOTIFY -->|"通知"| A3
+    NOTIFY -->|"通知"| A4
+    SCOPE -->|"控制"| SKILL_REUSE
+    SCOPE -->|"控制"| MCP_SYNC
+    Q5 -->|"输出"| REPORT

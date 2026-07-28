@@ -1,0 +1,81 @@
+%% 操作审计架构图（4.25）
+%% 四维操作审计（用户/Agent/系统/安全）、JSON diff 变更对比、哈希链防篡改、SIEM 集成
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef audit fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef dim fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef store fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef security fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef panel fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    %% ===== 四维操作审计 =====
+    subgraph AUDIT_DIM["四维操作审计"]
+        U["用户操作审计<br/>登录·登出·配置修改·权限变更<br/>创建/删除/更新 Agent·Skill·MCP"]:::dim
+        A["Agent 操作审计<br/>创建·配置·部署·启动·停止<br/>Skill/MCP 绑定·会话日志"]:::dim
+        S["系统操作审计<br/>配置变更·升级·备份·恢复<br/>扩缩容·日志清理·维护任务"]:::dim
+        SEC["安全操作审计<br/>权限赋予/撤销·密钥轮换<br/>API Key 管理·登录失败"]:::dim
+    end
+
+    %% ===== 审计日志内容 =====
+    subgraph CONTENT["每笔审计记录包含"]
+        C1[时间戳<br/>UTC+8·毫秒精度]:::panel
+        C2[操作者<br/>用户ID/Agent ID/系统]:::panel
+        C3[操作类型<br/>CRUD·Deploy·Config]:::panel
+        C4[资源类型与 ID<br/>Agent·Skill·MCP·Session]:::panel
+        C5[请求参数<br/>原始请求 JSON]:::panel
+        C6[操作结果<br/>成功·失败·拒绝·错误码]:::panel
+        C7[变更前/后对比<br/>JSON diff]:::audit
+        C8[客户端信息<br/>IP·User-Agent·来源]:::panel
+    end
+
+    %% ===== JSON diff 变更对比 =====
+    subgraph DIFF["变更对比 — JSON diff"]
+        JD1[diff 生成<br/>递归深度对比·数组差异]:::audit
+        JD2[diff 格式<br/>新增 +/ 删除 -/ 修改 ~]:::audit
+        JD3[diff 可视化<br/>侧边对比·颜色标注]:::audit
+        JD4[diff 聚合<br/>多变更合并展示]:::audit
+    end
+
+    %% ===== 哈希链防篡改 =====
+    subgraph CHAIN["哈希链防篡改"]
+        HC1[每笔审计记录<br/>计算 SHA-256 哈希]:::security
+        HC2[哈希链<br/>当前哈希 = SHA-256 防篡改]:::security
+        HC3[写后读校验<br/>写入后立即读取验证]:::security
+        HC4[定期全量校验<br/>重建哈希链·比对]:::security
+        HC5[只写权限<br/>审计日志 Append Only]:::security
+    end
+
+    %% ===== 存储策略 =====
+    subgraph STORE["冷热分离存储"]
+        ST1[热存储（90 天）<br/>Elasticsearch<br/>SSD·在线检索]:::store
+        ST2[冷存储（180 天+）<br/>MinIO/压缩归档<br/>HDD·离线查询]:::store
+        ST3[保留策略<br/>自动转冷·到期清理]:::store
+    end
+
+    %% ===== SIEM 集成 =====
+    subgraph SIEM["SIEM 集成"]
+        SI1[标准格式<br/>CEF / JSON / Syslog]:::security
+        SI2[导出接口<br/>API 拉取·事件推送]:::security
+        SI3[集成对象<br/>Splunk·QRadar·ELK·ArcSight]:::security
+    end
+
+    %% ===== 审计管理界面 =====
+    subgraph UI["审计管理界面"]
+        UI1[审计总览<br/>操作量趋势·四维分布]:::panel
+        UI2[审计搜索<br/>时间·操作者·类型·资源]:::panel
+        UI3[审计详情<br/>完整记录·diff 对比]:::panel
+        UI4[合规报表<br/>PDF 导出·180 天存档]:::panel
+    end
+
+    %% ===== 连接关系 =====
+    AUDIT_DIM -->|"产生"| CONTENT
+    CONTENT -->|"变更数据"| DIFF
+    DIFF -->|"记录"| CHAIN
+    CHAIN -->|"存储"| STORE
+    STORE -->|"检索"| UI
+    STORE -->|"导出"| SIEM
+
+    UI -->|"展示"| CONTENT
+    UI -->|"展示"| DIFF
+    UI -->|"展示"| CHAIN

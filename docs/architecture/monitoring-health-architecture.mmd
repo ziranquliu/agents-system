@@ -1,0 +1,92 @@
+%% 统一监控看板 + 健康监控架构图（4.21 + 4.24）
+%% 总览大盘、实时监控、单 Agent 下钻、告警管理、对比视图、四级健康检查
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef dash fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef health fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef infra fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef alert fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef panel fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    %% ===== 总览大盘 =====
+    subgraph OVERVIEW["总览大盘"]
+        O1[Agent 总数<br/>在线/离线/异常]:::panel
+        O2[总请求量<br/>今日/周/月趋势]:::panel
+        O3[平均响应时间<br/>P50/P95/P999]:::panel
+        O4[错误率<br/>4xx/5xx/超时]:::panel
+        O5[TCO 概览<br/>Token 消耗·成本]:::panel
+    end
+
+    %% ===== 实时监控 =====
+    subgraph REALTIME["实时监控"]
+        R1[指标卡片<br/>CPU·内存·连接数·QPS]:::dash
+        R2[时延曲线<br/>P50/P95/P99 实时曲线]:::dash
+        R3[流量面板<br/>请求量·Token 速率]:::dash
+        R4[错误面板<br/>实时错误流·状态码分布]:::dash
+    end
+
+    %% ===== 单 Agent 下钻 =====
+    subgraph DRILL["单 Agent 下钻"]
+        D1[Agent 详情<br/>状态·版本·生命周期]:::panel
+        D2[绑定的 Skill<br/>版本·状态·请求量]:::panel
+        D3[关联 MCP<br/>连接状态·时延]:::panel
+        D4[会话列表<br/>活跃会话·Token 消耗]:::panel
+        D5[操作历史<br/>变更·部署·配置]:::panel
+    end
+
+    %% ===== 告警管理 =====
+    subgraph ALERT["告警管理"]
+        A1[告警规则<br/>阈值·窗口·级别]:::alert
+        A2[告警列表<br/>触发·确认·恢复]:::alert
+        A3[通知渠道<br/>控制台·邮件·Webhook]:::alert
+        A4[静默规则<br/>维护窗口·排除]:::alert
+    end
+
+    %% ===== 对比视图 =====
+    subgraph COMPARE["对比视图"]
+        CV1[Agent 对比<br/>两 Agent 并行对比]:::panel
+        CV2[时段对比<br/>今日 vs 昨日 vs 上周]:::panel
+        CV3[模型对比<br/>响应质量·成本·时延]:::panel
+    end
+
+    %% ===== 四级健康检查 =====
+    subgraph HEALTH_CHECK["4 级健康检查"]
+        L1[L1 存活检查<br/>进程存在·端口监听]:::health
+        L2[L2 就绪检查<br/>组件初始化·依赖就绪]:::health
+        L3[L3 能力检查<br/>功能测试·响应正常]:::health
+        L4[L4 端到端检查<br/>完整链路·真实场景]:::health
+    end
+
+    %% ===== 健康评分面板 =====
+    subgraph SCORE["健康评分面板"]
+        S1[评分公式<br/>分数 = 权重×归一化指标]:::panel
+        S2[红黄绿面板<br/>≥90 绿·≥60 黄·≤60 红]:::panel
+        S3[多维度评分<br/>存活·性能·容量·质量]:::panel
+    end
+
+    %% ===== 技术栈 =====
+    subgraph TECH["技术栈"]
+        T1[Prometheus<br/>指标采集]:::infra
+        T2[Grafana<br/>可视化]:::infra
+        T3[Node Exporter<br/>节点指标]:::infra
+        T4[Custom Exporter<br/>业务指标]:::infra
+        T5[Alertmanager<br/>告警]:::infra
+    end
+
+    %% ===== 连接关系 =====
+    TECH -->|"采集指标"| OVERVIEW
+    TECH -->|"实时数据"| REALTIME
+    TECH -->|"下钻数据"| DRILL
+    TECH -->|"触发条件"| ALERT
+
+    OVERVIEW -->|"进入下钻"| DRILL
+    REALTIME -->|"汇总"| OVERVIEW
+    DRILL -->|"对比"| COMPARE
+
+    ALERT -->|"推送"| OVERVIEW
+    ALERT -->|"通知"| DRILL
+
+    HEALTH_CHECK -->|"结果"| SCORE
+    SCORE -->|"状态"| OVERVIEW
+    SCORE -->|"告警"| ALERT

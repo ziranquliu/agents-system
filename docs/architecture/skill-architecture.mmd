@@ -1,0 +1,64 @@
+%% Skill 管理体系架构图
+%% Skill 注册中心、版本仓库、依赖管理器、运行时的架构与开发到安装全链路
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef registry fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef version fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef deps fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef runtime fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef store fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef dev fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef user fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    subgraph REG["Skill 注册中心"]
+        REG1[元数据存储]:::sub
+        REG2[技能分类目录]:::sub
+        REG3[发现与搜索]:::sub
+        REG4[权限管理]:::sub
+    end
+
+    subgraph VER["版本仓库"]
+        VER1[语义化版本控制]:::sub
+        VER2[多版本共存]:::sub
+        VER3[版本回滚]:::sub
+        VER4[版本发布管道]:::sub
+    end
+
+    subgraph DEP["依赖管理器"]
+        DEP1[依赖声明解析]:::sub
+        DEP2[依赖树计算]:::sub
+        DEP3[冲突检测]:::sub
+        DEP4[自动安装]:::sub
+    end
+
+    subgraph RUN["Skill 运行时"]
+        RUN1[沙箱隔离]:::sub
+        RUN2[生命周期管理]:::sub
+        RUN3[资源限制]:::sub
+        RUN4[事件钩子]:::sub
+    end
+
+    %% ===== 外部角色与仓库 =====
+    DEVELOPER["Skill 开发者"]:::dev
+    SKILL_REPO["Skill 在线市场"]:::store
+    USER_AGENT["Agent / 用户"]:::user
+
+    %% ==== 开发到安装全链路 ====
+    DEVELOPER -->|"① 编写代码 + skill.yaml"| REG
+    REG -->|"② 注册元数据"| VER
+    VER -->|"③ 发布新版本"| SKILL_REPO
+
+    SKILL_REPO -->|"④ 拉取安装"| DEP
+    DEP -->|"⑤ 解析依赖树"| REG
+    DEP -->|"⑥ 下载依赖包"| SKILL_REPO
+
+    DEP -->|"⑦ 依赖就绪"| RUN
+    REG -->|"⑧ 激活注册"| RUN
+    RUN -->|"⑨ 提供能力"| USER_AGENT
+
+    USER_AGENT -->|"⑩ 调用反馈"| REG
+    RUN -->|"日志/指标"| DEVELOPER
+
+    L1[开发 → 注册 → 安装 → 运行 完整链路]:::

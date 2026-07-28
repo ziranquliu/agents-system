@@ -1,0 +1,47 @@
+%% 模型配置模板与一键复用架构图
+graph TB
+    classDef core fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef agent fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef template fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef version fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef route fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+
+    subgraph CENTER["模型配置管理中心"]
+        TEMPLATE["📋 模型配置模板<br/>Provider · API Key · Endpoint<br/>模型名称 · 默认参数"]:::template
+        CATEGORY["🏷️ 模板分类<br/>对话模型 · 嵌入模型<br/>代码模型 · 按 Provider 分类"]:::template
+        TEST["🔍 连接测试<br/>验证可用性 · 测试响应"]:::template
+    end
+
+    subgraph AGENTS["多 Agent 绑定"]
+        AG1["Agent A<br/>对话助手<br/>继承全部参数"]:::agent
+        AG2["Agent B<br/>代码生成器<br/>覆盖 Temperature=0.1"]:::agent
+        AG3["Agent C<br/>翻译助手<br/>覆盖 Max Tokens=4096"]:::agent
+        AG4["Agent D<br/>数据分析<br/>继承全部参数"]:::agent
+    end
+
+    subgraph VERSION["版本管理"]
+        V1["v1.0<br/>初始版本"]:::version
+        V2["v1.1<br/>修改 API Key"]:::version
+        V3["v1.2<br/>切换模型名称"]:::version
+        VN["历史版本<br/>对比 · 回滚"]:::version
+    end
+
+    subgraph SYNC["同步策略"]
+        S1["❗ 变更通知<br/>检测关联 Agent"]:::template
+        S2["✅ 自动同步<br/>灰度推送·分批"]:::template
+        S3["⏭️ 跳过<br/>保持当前版本"]:::template
+        S4["🔄 批量确认<br/>一键全部更新"]:::template
+    end
+
+    subgraph ROUTE["与模型路由协同"]
+        R1["🔀 路由策略 A<br/>低成本优先<br/>公用同一模板"]:::route
+        R2["🔀 路由策略 B<br/>高性能优先<br/>公用同一模板"]:::route
+    end
+
+    TEMPLATE -->|"绑定"| AGENTS
+    TEMPLATE -->|"版本管理"| VERSION
+    VERSION -->|"变更"| SYNC
+    SYNC -->|"同步到"| AGENTS
+    TEMPLATE -->|"参与"| ROUTE
+    CATEGORY -->|"分类"| TEMPLATE
+    TEST -->|"验证"| TEMPLATE

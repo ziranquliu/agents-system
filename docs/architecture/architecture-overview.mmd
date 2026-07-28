@@ -1,0 +1,138 @@
+%% 系统整体分层架构图（v1.6）
+%% 新增：批量 Skill 安装 + Skill 跨 Agent 复用 + 多选会话导出 + MCP 批量安装与跨 Agent 同步
+%% 五层分层架构
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef ui fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef app fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef core fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef v14 fill:#06b6d4,stroke:#22d3ee,stroke-width:2px,color:#fff
+    classDef v15 fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef new fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef market fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef model fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef infra fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef label fill:#555,stroke:none,color:#94a3b8,font-size:11px
+
+    L1_USER["用户交互层"] -.-> L1
+    subgraph L1[" "]
+        UI1[Web 管理控制台]:::ui
+        UI2[CLI 命令行工具]:::ui
+        UI3[API 网关入口]:::ui
+    end
+
+    L2_APP["应用服务层"] -.-> L2
+    subgraph L2[" "]
+        AS1[用户管理]:::app
+        AS2[权限认证]:::app
+        AS3[任务调度]:::app
+        AS4[日志审计]:::app
+        AS5[仪表盘]:::app
+        AS6[统一监控看板<br/>总览大盘·实时指标·告警]:::v15
+        AS7[操作审计服务<br/>四维审计·JSON diff·SIEM]:::v15
+    end
+
+    L3_CORE["核心能力层"] -.-> L3
+    subgraph L3[" "]
+        C1[Agent 引擎]:::core
+        C2[Skill 系统<br/>批量安装·跨 Agent 复用<br/>直接引用·复制·模板]:::core
+        C3[MCP 网关<br/>批量安装·跨 Agent 同步<br/>直接引用·复制配置·模板]:::core
+        C4[知识库引擎]:::core
+        C5[工作流引擎]:::core
+        C6[三层记忆管理<br/>短期·长期·共享·脱敏]:::v15
+        C7[本地组件扫描器<br/>扫描 Agent/Skill/MCP]:::new
+        C8[统一更新检测中心<br/>版本检测·兼容性·更新执行]:::new
+        C9[多智能体协作引擎<br/>5种协作模式·任务分解]:::v14
+        C10[Skill 优化引擎<br/>缓存·预加载·DAG·熔断]:::v14
+        C11[MCP 优化引擎<br/>连接池·合并·熔断·安全]:::v14
+        C12[会话管理器<br/>6态生命周期·三级存储·多选导出]:::v14
+        C13[Token 优化器<br/>语义缓存·级联·压缩·预算]:::v14
+        C14[OTel 可观测性<br/>调用链路追踪]:::v14
+    end
+
+    L3_MARKET["在线市场层"] -.-> LM
+    subgraph LM[" "]
+        MKT_AGENT[智能体在线市场<br/>12类预置模板·一键安装]:::market
+        MKT_MODEL[模型在线市场<br/>本地模型·云端 API·一键接入]:::market
+    end
+
+    L4_MODEL["模型接入层"] -.-> L4
+    subgraph L4[" "]
+        M1[OpenAI 适配器]:::model
+        M2[Claude 适配器]:::model
+        M3[本地模型适配器]:::model
+        M4[多模型路由]:::model
+        M5[模型负载均衡]:::model
+        M6[故障转移]:::model
+    end
+
+    L5_INFRA["基础设施层"] -.-> L5
+    subgraph L5[" "]
+        I1[PostgreSQL]:::infra
+        I2[Redis 缓存]:::infra
+        I3[消息队列]:::infra
+        I4[文件存储]:::infra
+        I5[向量数据库]:::infra
+        I6[Prometheus<br/>时序监控]:::infra
+        I7[Jaeger/Tempo<br/>链路追踪]:::infra
+        I8[ELK/Loki<br/>日志聚合]:::v15
+        I9[异地备份存储<br/>AES-256·SHA-256]:::v15
+    end
+
+    F1[▼ 请求流入]:::label
+    F2[▼ 服务编排]:::label
+    F3[▼ 能力调用]:::label
+    F4[▼ 模型推理]:::label
+    F5[▲ 数据持久化]:::label
+
+    L1 --> F1
+    F1 --> L2
+    L2 --> F2
+    F2 --> L3
+    L3 --> F3
+    F3 --> LM
+    LM --> F4
+    F4 --> L4
+    L4 --> F5
+    F5 --> L5
+
+    L5 -.->|数据返回| L4
+    L4 -.->|结果返回| LM
+    LM -.->|响应返回| L3
+    L3 -.->|响应返回| L2
+    L2 -.->|响应返回| L1
+
+    %% 市场层连线
+    MKT_AGENT -.->|安装模板| C1
+    MKT_MODEL -.->|配置模型| L4
+    MKT_AGENT -.->|批量分配 Skill| C2
+    MKT_AGENT -.->|批量注册 MCP| C3
+
+    %% 扫描器与检测中心
+    C7 -.->|扫描| C1 & C2 & C3
+    C8 -.->|查询市场版本| LM
+    C8 -.->|触发更新| C1 & C2 & C3
+
+    %% v1.4 新模块连线
+    C9 -.->|协调| C1
+    C10 -.->|优化| C2
+    C11 -.->|优化| C3
+    C12 -.->|管理会话| C1
+    C13 -.->|优化Token| C10 & L4
+    C14 -.->|追踪| C1 & C2 & C3 & C9 & C10 & C11 & C12 & C13
+
+    %% v1.5 新模块连线
+    AS6 -.->|展示监控看板| UI1
+    AS6 -.->|拉取指标| C1 & C2 & C3 & C7 & C8 & C9 & C10 & C11 & C12 & C13 & C14
+    AS7 -.->|记录操作| C1 & C2 & C3 & C9 & C10 & C11 & C12
+
+    C6 -.->|短期记忆| I2
+    C6 -.->|长期记忆| I5
+    C6 -.->|共享记忆| I1
+    C6 -.->|增强记忆管理| C1
+
+    %% v1.6 新模块连线
+    C2 -.->|直接引用/复制/模板| C1
+    C3 -.->|直接引用/复制配置/模板| C1
+    C12 -.->|多选导出(MD/JSON/PDF/CSV)| I4

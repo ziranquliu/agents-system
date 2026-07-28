@@ -1,0 +1,84 @@
+%% Skill/MCP 优化引擎架构图（4.13 + 4.14）
+%% Skill：三级缓存、预加载、DAG 并行/熔断、组合调优
+%% MCP：连接池、请求合并、指数据退避/熔断、负载均衡、安全加固
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef skill fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef mcp fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef shared fill:#06b6d4,stroke:#22d3ee,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+    classDef problem fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+
+    %% ===== Skill 优化引擎 =====
+    subgraph SKILL_OPT["Skill 优化引擎（4.13）"]
+        S_CACHE["三级缓存架构<br/>L1: 进程内缓存·≤1ms<br/>L2: Redis 缓存·≤5ms<br/>L3: 数据库持久化"]:::skill
+
+        S_PRELOAD["预加载策略<br/>Agent 创建→预加载依赖 Skill<br/>常用 Skill 热加载"]:::skill
+
+        S_DAG["DAG 执行优化<br/>并行执行无依赖节点<br/>条件短路·跳过无用分支<br/>循环检测·终止死循环"]:::skill
+
+        S_FUSE["熔断机制<br/>错误率阈值→打开熔断器→降级<br/>半开恢复·指数退避等待"]:::skill
+
+        S_COMBINE["组合参数调优<br/>相同 Skill 请求合并为批量<br/>减少调用次数"]:::skill
+    end
+
+    %% ===== MCP 优化引擎 =====
+    subgraph MCP_OPT["MCP 优化引擎（4.14）"]
+        M_POOL["连接池管理<br/>复用长连接·减少握手开销<br/>池大小动态调整·空闲回收"]:::mcp
+
+        M_MERGE["请求优化<br/>缓存重复请求·相同请求命中缓存<br/>请求压缩·减少传输体积"]:::mcp
+
+        M_CIRCUIT["熔断与降级<br/>指数退避：1s→2s→4s→8s<br/>3 态熔断器：关闭/打开/半开<br/>降级策略：返回缓存/默认值"]:::mcp
+
+        M_LOAD["负载均衡<br/>轮询·最少连接·加权分配<br/>调用限流·令牌桶算法<br/>灰度发布·金丝雀部署"]:::mcp
+
+        M_SECURE["安全加固<br/>HMAC 请求签名<br/>TLS 传输加密<br/>RBAC 权限控制"]:::mcp
+    end
+
+    %% ===== 共享组件 =====
+    subgraph SHARED["共享基础设施"]
+        S_OTEL["OTel 调用链路追踪<br/>记录每次调用·分析瓶颈"]:::shared
+        S_MON["性能监控仪表盘<br/>延迟·并发·错误率·命中率"]:::shared
+    end
+
+    %% ===== 大问题处理方案 =====
+    subgraph PROBLEMS["大问题处理方案"]
+        P1["冷启动慢<br/>→ 预加载 + 热替换"]:::problem
+        P2["依赖链断裂<br/>→ DAG 校验 + 备用节点"]:::problem
+        P3["第三方 MCP 不稳定<br/>→ 熔断 + 降级 + 重试"]:::problem
+        P4["重复调用浪费<br/>→ 请求缓存 + 合并"]:::problem
+        P5["安全漏洞<br/>→ HMAC + TLS + RBAC"]:::problem
+    end
+
+    %% ===== 外部 =====
+    AGENT["Agent 引擎"]:::sub
+    MCP_SRV["MCP Server 实例"]:::sub
+
+    %% ===== 连接关系 =====
+    AGENT -->|"调用 Skill"| S_CACHE
+    S_CACHE -->|"未命中→DAG执行"| S_DAG
+    S_PRELOAD -.->|"预热"| S_CACHE
+    S_DAG -->|"执行"| S_FUSE
+    S_FUSE -->|"熔断→降级"| AGENT
+    S_COMBINE -->|"批量"| S_DAG
+
+    S_OTEL -.->|"追踪"| S_CACHE & S_DAG & S_FUSE & S_COMBINE
+
+    AGENT -->|"调用 MCP"| M_POOL
+    M_POOL -->|"复用连接"| M_MERGE
+    M_MERGE -->|"合并请求"| M_CIRCUIT
+    M_CIRCUIT -->|"路由"| M_LOAD
+    M_LOAD -->|"分发"| MCP_SRV
+    M_SECURE -.->|"保护"| M_POOL & M_MERGE & M_LOAD
+
+    MCP_SRV -->|"结果"| M_LOAD
+    M_LOAD -->|"响应"| M_CIRCUIT
+    M_CIRCUIT -->|"返回"| M_MERGE
+    M_MERGE -->|"返回"| AGENT
+
+    S_OTEL -.->|"追踪"| M_POOL & M_MERGE & M_CIRCUIT & M_LOAD
+    S_MON -.->|"监控"| S_OTEL
+
+    PROBLEMS -.->|"解决方向"| SKILL_OPT
+    PROBLEMS -.->|"解决方向"| MCP_OPT

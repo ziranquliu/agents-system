@@ -1,0 +1,99 @@
+%% 智能体在线市场架构图
+%% 12 类预置 Agent 模板、一键安装流程、模板格式、定制化能力、开发者上传机制
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef header fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef template fill:#3b82f6,stroke:#60a5fa,stroke-width:1px,color:#fff
+    classDef flow fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef config fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef custom fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef dev fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef user fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    %% ===== 市场首页 =====
+    subgraph HOME["市场首页"]
+        REC[推荐区 · 精选热门]:::sub
+        CAT[分类导航 · 12 个类别]:::sub
+        SEARCH[搜索栏 · 全文搜索]:::sub
+        STAT[安装统计 · 总数/总安装量]:::sub
+    end
+
+    %% ===== 预置 Agent 模板库 =====
+    subgraph TEMPLATES["预置 Agent 模板库（12类）"]
+        T1[通用对话助手<br/>对话·问答·闲聊]:::template
+        T2[编程开发助手<br/>代码·调试·重构]:::template
+        T3[数据分析师<br/>清洗·统计·图表]:::template
+        T4[内容写作助手<br/>文章·文案·报告]:::template
+        T5[客服支持 Agent<br/>应答·工单·知识]:::template
+        T6[研究分析师<br/>检索·整合·报告]:::template
+        T7[流程自动化 Agent<br/>编排·定时·执行]:::template
+        T8[翻译助手<br/>50+语种·本地化]:::template
+        T9[教育辅导 Agent<br/>讲解·习题·规划]:::template
+        T10[项目管理助手<br/>分解·跟踪·预警]:::template
+        T11[知识问答专家<br/>RAG·溯源·置信度]:::template
+        T12[图像设计助手<br/>文生图·海报·素材]:::template
+    end
+
+    %% ===== 一键安装流程 =====
+    subgraph INSTALL["一键安装流程"]
+        I1[① 选择模板]:::sub
+        I2[② 配置引导]:::sub
+        I3[③ 预览效果]:::sub
+        I4[④ 确认创建]:::sub
+        I5[⑤ 部署运行]:::sub
+        I6[⑥ 安装完成]:::sub
+    end
+
+    %% ===== 配置面板 =====
+    subgraph CONFIG["配置面板"]
+        C1[基本信息<br/>名称·头像]:::config
+        C2[模型选择<br/>底层模型]:::config
+        C3[Skill 绑定<br/>附加技能]:::config
+        C4[知识库关联<br/>RAG 源]:::config
+        C5[高级设置<br/>Prompt · 温度 · 上下文]:::config
+    end
+
+    %% ===== 定制化能力 =====
+    subgraph CUSTOM["定制化能力"]
+        CU1[模型切换]:::custom
+        CU2[Prompt 微调]:::custom
+        CU3[Skill 增删]:::custom
+        CU4[工具绑定]:::custom
+        CU5[知识库关联]:::custom
+        CU6[参数调节]:::custom
+    end
+
+    %% ===== 开发者上传 =====
+    subgraph DEVELOPER["开发者上传机制"]
+        D1[模板打包<br/>.agent-template]:::dev
+        D2[格式校验<br/>元数据验证]:::dev
+        D3[预览测试<br/>生成测试实例]:::dev
+        D4[审核发布<br/>上架市场]:::dev
+    end
+
+    %% ===== 外部角色 =====
+    USER["用户/管理员"]:::user
+    AGENT_ENGINE["Agent 引擎"]:::header
+    SKILL_SYS["Skill 系统"]:::flow
+
+    %% ===== 连接关系 =====
+    USER -->|"浏览"| HOME
+    HOME -->|"选择模板"| TEMPLATES
+    TEMPLATES -->|"安装"| INSTALL
+    INSTALL -->|"填写配置"| CONFIG
+    CONFIG -->|"创建实例"| I3
+    I3 -->|"确认"| I4
+    I4 -->|"生成"| AGENT_ENGINE
+    AGENT_ENGINE -->|"启动"| I5
+    I5 -->|"完成"| I6
+
+    CONFIG -.->|"关联"| SKILL_SYS
+    CONFIG -.->|"绑定"| AGENT_ENGINE
+
+    USER -->|"自定义"| CUSTOM
+    CUSTOM -.->|"修改"| AGENT_ENGINE
+
+    DEVELOPER -->|"上传"| TEMPLATES
+    D1 --> D2 --> D3 --> D4

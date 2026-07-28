@@ -1,0 +1,64 @@
+%% 操作审计与记忆管理架构图（4.25 + 4.1.5）
+%% 四维审计、哈希链防篡改、SIEM 集成、三层记忆、脱敏与 GDPR
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef audit fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef memory fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef store fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef security fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef panel fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    %% ===== 操作审计 =====
+    subgraph AUDIT["操作审计 — 4 维范围"]
+        A1[用户操作审计<br/>登录·配置·权限·CRUD]:::audit
+        A2[Agent 操作审计<br/>创建·部署·绑定·会话]:::audit
+        A3[系统操作审计<br/>配置·升级·备份·伸缩]:::audit
+        A4[安全操作审计<br/>密钥轮换·API Key·权限]:::audit
+    end
+
+    %% ===== 审计存储 =====
+    subgraph STORE["审计存储"]
+        S1[追加写日志<br/>Append Only·不可篡改]:::store
+        S2[哈希链<br/>SHA-256（上笔哈希+本笔内容）]:::security
+        S3[冷热分离<br/>ES（90 天）→MinIO（180 天+）]:::store
+    end
+
+    %% ===== 审计查询 =====
+    subgraph QUERY["审计查询"]
+        Q1[多维搜索<br/>时间·操作者·类型·资源·结果]:::panel
+        Q2[JSON diff<br/>变更前后对比·颜色标注]:::panel
+        Q3[SIEM 集成<br/>CEF/JSON/Syslog·Splunk/QRadar]:::security
+        Q4[合规报告<br/>PDF 导出·180 天存档]:::panel
+    end
+
+    %% ===== 三层记忆 =====
+    subgraph MEMORY["三层记忆管理"]
+        M1[短期记忆<br/>Redis<br/>当前会话·最近N轮·≤1ms]:::memory
+        M2[长期记忆<br/>向量数据库<br/>历史总结·重要性评分·≤50ms]:::memory
+        M3[共享记忆<br/>PostgreSQL<br/>多 Agent 协同·协作上下文·≤10ms]:::memory
+    end
+
+    %% ===== 记忆管理界面 =====
+    subgraph UI["记忆管理界面"]
+        U1[记忆查看<br/>按时间/Agent/类型检索]:::panel
+        U2[记忆搜索<br/>全文搜索·向量搜索]:::panel
+        U3[记忆清理<br/>批量删除·按策略清理]:::panel
+        U4[记忆脱敏<br/>敏感信息·GDPR 合规]:::security
+        U5[记忆分析<br/>词云·高频主题·趋势]:::panel
+    end
+
+    %% ===== 连接关系 =====
+    AUDIT -->|"产生审计记录"| STORE
+    STORE -->|"检索"| QUERY
+    QUERY -->|"展示"| AUDIT
+
+    M1 -->|"短期·低时延"| AGENT["Agent 引擎"]:::panel
+    M2 -->|"长期·向量化"| KB["知识库引擎"]:::panel
+    M3 -->|"共享·协同"| COLLAB["协作引擎"]:::panel
+
+    MEMORY -->|"管理"| UI
+    UI -->|"脱敏"| SECURE["GDPR 合规"]:::security
+
+    MEMORY -.->|"重要性遗忘"| M2
+    MEMORY -.->|"自动清理"| M1

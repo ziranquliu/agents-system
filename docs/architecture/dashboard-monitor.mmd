@@ -1,0 +1,80 @@
+%% 统一监控看板架构图（4.21）
+%% 总览大盘、实时监控曲线、单 Agent 下钻、告警管理、对比视图
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef dash fill:#f43f5e,stroke:#fb7185,stroke-width:2px,color:#fff
+    classDef panel fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+    classDef infra fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef alert fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+
+    %% ===== 总览大盘 =====
+    subgraph OVERVIEW["总览大盘"]
+        O1[Agent 状态<br/>在线/离线/异常·总数 N]:::panel
+        O2[健康评分<br/>综合评分·红黄绿面板]:::panel
+        O3[请求量趋势<br/>今日/周/月曲线]:::panel
+        O4[Token 消耗<br/>今日·趋势·成本]:::panel
+        O5[错误率概览<br/>4xx/5xx/超时分布]:::panel
+    end
+
+    %% ===== 实时监控曲线 =====
+    subgraph REALTIME["实时监控曲线"]
+        R1[时延曲线<br/>P50/P95/P999 实时图]:::dash
+        R2[流量面板<br/>QPS·Token/s 实时]:::dash
+        R3[资源面板<br/>CPU·内存·连接数]:::dash
+        R4[错误面板<br/>实时错误流·状态码]:::dash
+    end
+
+    %% ===== 单 Agent 下钻 =====
+    subgraph DRILL["单 Agent 下钻详情"]
+        D1[基本信息<br/>状态·版本·生命周期]:::panel
+        D2[Skill 统计<br/>版本·请求量·错误率]:::panel
+        D3[MCP 状态<br/>连接·时延·调用量]:::panel
+        D4[会话详情<br/>活跃数·Token 消耗]:::panel
+        D5[操作历史<br/>变更·部署·配置时间线]:::panel
+    end
+
+    %% ===== 告警管理 =====
+    subgraph ALERT["告警管理"]
+        A1[告警规则<br/>阈值·窗口·级别·静默]:::alert
+        A2[告警检测<br/>规则匹配·聚合·抑制]:::alert
+        A3[告警通知<br/>控制台·邮件·Webhook]:::alert
+        A4[告警列表<br/>触发·确认·恢复·历史]:::alert
+    end
+
+    %% ===== 对比视图 =====
+    subgraph COMPARE["对比视图"]
+        C1[Agent 对比<br/>两 Agent 并行·雷达图]:::panel
+        C2[时段对比<br/>今日 vs 昨日 vs 上周]:::panel
+        C3[模型对比<br/>质量·成本·时延·柱状图]:::panel
+    end
+
+    %% ===== 自定义看板 =====
+    subgraph CUSTOM["自定义看板"]
+        CU1[拖拽布局<br/>添加/移除/排列面板]:::panel
+        CU2[保存模板<br/>多套看板·快速切换]:::panel
+        CU3[分享导出<br/>URL·截图·PDF]:::panel
+    end
+
+    %% ===== 技术栈 =====
+    subgraph TECH["技术栈"]
+        T1[Prometheus<br/>指标采集·聚合·存储]:::infra
+        T2[Grafana<br/>可视化·面板·告警]:::infra
+        T3[Node Exporter<br/>节点指标·资源利用率]:::infra
+        T4[Custom Exporter<br/>业务指标·Agent 定制]:::infra
+        T5[Alertmanager<br/>告警路由·通知]:::infra
+    end
+
+    %% ===== 连接关系 =====
+    TECH -->|"采集指标"| OVERVIEW
+    TECH -->|"实时数据"| REALTIME
+    TECH -->|"下钻数据"| DRILL
+    TECH -->|"触发条件"| ALERT
+
+    OVERVIEW -->|"点击"| DRILL
+    OVERVIEW -->|"对比"| COMPARE
+    OVERVIEW -->|"自定义"| CUSTOM
+
+    REALTIME -->|"汇总"| OVERVIEW
+    ALERT -->|"推送"| OVERVIEW
+    ALERT -->|"通知"| DRILL

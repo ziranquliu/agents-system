@@ -1,0 +1,85 @@
+%% MCP 管理体系架构图
+%% MCP Server 注册中心、服务发现、健康检查、调用网关的完整链路
+
+graph TB
+    %% ===== 样式定义 =====
+    classDef registry fill:#6366f1,stroke:#818cf8,stroke-width:2px,color:#fff
+    classDef discovery fill:#3b82f6,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef health fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef gateway fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
+    classDef market fill:#8b5cf6,stroke:#a78bfa,stroke-width:2px,color:#fff
+    classDef server fill:#ec4899,stroke:#f472b6,stroke-width:2px,color:#fff
+    classDef agent fill:#14b8a6,stroke:#2dd4bf,stroke-width:2px,color:#fff
+    classDef sub fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0
+
+    subgraph REG["MCP Server 注册中心"]
+        REG1[Server 元数据注册]:::sub
+        REG2[能力描述索引]:::sub
+        REG3[工具清单管理]:::sub
+        REG4[Server 分类]:::sub
+    end
+
+    subgraph DISC["服务发现"]
+        DISC1[服务端自动发现]:::sub
+        DISC2[本地配置发现]:::sub
+        DISC3[动态热加载]:::sub
+        DISC4[服务端优先级]:::sub
+    end
+
+    subgraph HC["健康检查"]
+        HC1[心跳检测]:::sub
+        HC2[连接超时监控]:::sub
+        HC3[自动重连机制]:::sub
+        HC4[状态报告]:::sub
+    end
+
+    subgraph GW["调用网关"]
+        GW1[请求路由]:::sub
+        GW2[参数校验]:::sub
+        GW3[结果格式化]:::sub
+        GW4[调用限流]:::sub
+        GW5[审计日志]:::sub
+    end
+
+    %% ===== MCP 市场与 Server 实例 =====
+    MCP_MARKET["MCP 在线市场"]:::market
+
+    S1["文件系统 MCP"]:::server
+    S2["数据库 MCP"]:::server
+    S3["浏览器 MCP"]:::server
+    S4["搜索 MCP"]:::server
+    S5["自定义 MCP"]:::server
+
+    AGENT["Agent 引擎"]:::agent
+
+    %% ===== 连接关系 =====
+    MCP_MARKET -->|"① 下载/安装"| REG
+    REG -->|"② 注册服务"| DISC
+    REG -->|"③ 注册端点"| GW
+
+    DISC -->|"④ 发现可用 Server"| S1
+    DISC -->|"④ 发现可用 Server"| S2
+    DISC -->|"④ 发现可用 Server"| S3
+    DISC -->|"④ 发现可用 Server"| S4
+    DISC -->|"④ 发现可用 Server"| S5
+
+    S1 -->|"⑤ 心跳上报"| HC
+    S2 -->|"⑤ 心跳上报"| HC
+    S3 -->|"⑤ 心跳上报"| HC
+    S4 -->|"⑤ 心跳上报"| HC
+    S5 -->|"⑤ 心跳上报"| HC
+
+    HC -->|"⑥ 健康状态"| GW
+
+    AGENT -->|"⑦ 工具调用请求"| GW
+    GW -->|"⑧ 路由到目标"| S1
+    GW -->|"⑧ 路由到目标"| S2
+    GW -->|"⑧ 路由到目标"| S3
+    GW -->|"⑧ 路由到目标"| S4
+    GW -->|"⑧ 路由到目标"| S5
+    S1 -->|"⑨ 返回结果"| GW
+    S2 -->|"⑨ 返回结果"| GW
+    S3 -->|"⑨ 返回结果"| GW
+    S4 -->|"⑨ 返回结果"| GW
+    S5 -->|"⑨ 返回结果"| GW
+    GW -->|"⑩ 格式化响应"| AGENT
