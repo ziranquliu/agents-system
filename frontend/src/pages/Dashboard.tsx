@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAgentStore } from '../stores/agentStore'
+import { useModelConfigStore } from '../stores/modelConfigStore'
+import { useSkillStore } from '../stores/skillStore'
+import { useMCPServerStore } from '../stores/mcpServerStore'
 import { Loading, Empty } from '../components/ui'
+import * as convApi from '../api/conversations'
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   draft: { label: '草稿', color: 'bg-gray-100 text-gray-600' },
@@ -11,15 +15,27 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   archived: { label: '已归档', color: 'bg-slate-100 text-slate-600' },
 }
 
-interface Stats {
-  total: number; draft: number; running: number; stopped: number; error: number; archived: number
-}
-
 export default function Dashboard() {
-  const { agents, fetchAgents, loading } = useAgentStore()
-  const [stats, setStats] = useState<Stats>({ total: 0, draft: 0, running: 0, stopped: 0, error: 0, archived: 0 })
+  const { agents, fetchAgents } = useAgentStore()
+  const { items: models, fetch: fetchModels } = useModelConfigStore()
+  const { items: skills, fetch: fetchSkills } = useSkillStore()
+  const { items: mcps, fetch: fetchMcps } = useMCPServerStore()
+  const [convCount, setConvCount] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    total: 0, draft: 0, running: 0, stopped: 0, error: 0, archived: 0,
+  })
 
-  useEffect(() => { fetchAgents({ pageSize: 100 }) }, [])
+  useEffect(() => {
+    Promise.all([
+      fetchAgents({ pageSize: 100 }),
+      fetchModels({ pageSize: 1 }),
+      fetchSkills({ pageSize: 1 }),
+      fetchMcps({ pageSize: 1 }),
+      convApi.listConversations({ page_size: 1 }).then(r => setConvCount(r.total)),
+    ]).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+
   useEffect(() => {
     setStats({
       total: agents.length,
@@ -34,10 +50,10 @@ export default function Dashboard() {
   const statCards = [
     { label: 'Agent 总数', value: stats.total, icon: '🤖', bg: 'bg-blue-50', text: 'text-blue-700' },
     { label: '运行中', value: stats.running, icon: '▶️', bg: 'bg-green-50', text: 'text-green-700' },
-    { label: '草稿', value: stats.draft, icon: '📝', bg: 'bg-gray-50', text: 'text-gray-700' },
-    { label: '已停止', value: stats.stopped, icon: '⏹️', bg: 'bg-yellow-50', text: 'text-yellow-700' },
-    { label: '异常', value: stats.error, icon: '⚠️', bg: 'bg-red-50', text: 'text-red-700' },
-    { label: '已归档', value: stats.archived, icon: '📦', bg: 'bg-slate-50', text: 'text-slate-700' },
+    { label: '模型配置', value: models.length, icon: '🧠', bg: 'bg-purple-50', text: 'text-purple-700' },
+    { label: '对话', value: convCount, icon: '💬', bg: 'bg-cyan-50', text: 'text-cyan-700' },
+    { label: 'Skills', value: skills.length, icon: '🔧', bg: 'bg-amber-50', text: 'text-amber-700' },
+    { label: 'MCP 服务', value: mcps.length, icon: '🔗', bg: 'bg-indigo-50', text: 'text-indigo-700' },
   ]
 
   const quickActions = [

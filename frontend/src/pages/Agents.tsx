@@ -89,7 +89,8 @@ export default function Agents() {
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Agent 管理</h1>
@@ -258,5 +259,6 @@ export default function Agents() {
         </div>
       </div>
     )}
+    </>
   )
 }

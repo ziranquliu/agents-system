@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ConversationInfo, ConversationListItem } from '../api/conversations'
 import * as convApi from '../api/conversations'
+import { chatStream } from '../api/chat'
 
 interface ConversationState {
   // 列表
@@ -20,6 +21,12 @@ interface ConversationState {
   messagesTotal: number
   messagesLoading: boolean
 
+  // 流式发送
+  sending: boolean
+  streamingText: string
+  abortStream: (() => void) | null
+  transportMode: 'sse' | 'websocket'
+
   fetchConversations: (opts?: {
     page?: number
     pageSize?: number
@@ -34,6 +41,14 @@ interface ConversationState {
     page?: number
     pageSize?: number
   }) => Promise<void>
+
+  sendMessage: (conversationId: string, content: string, model?: string) => Promise<void>
+  stopStream: () => void
+  startStream: () => void
+  appendStream: (text: string) => void
+  finishStream: (conversationId: string, fullText: string) => Promise<void>
+  resetStream: () => void
+  setTransportMode: (mode: 'sse' | 'websocket') => void
 
   setSearch: (search: string) => void
   setStatusFilter: (status: string) => void
@@ -56,6 +71,12 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   messages: [],
   messagesTotal: 0,
   messagesLoading: false,
+
+  // 流式发送初始状态
+  sending: false,
+  streamingText: '',
+  abortStream: null,
+  transportMode: 'sse',
 
   fetchConversations: async (opts) => {
     const { page, pageSize, search, statusFilter, agentFilter } = {
@@ -151,6 +172,116 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     } catch (e: any) {
       set({ messagesLoading: false })
     }
+  },
+
+  sendMessage: async (conversationId, content, model = 'gpt-4o-mini') => {
+    const prevMessages = get().messages
+    const userMessage: convApi.MessageInfo = {
+      id: `temp_${Date.now()}`,
+      conversation_id: conversationId,
+      role: 'user',
+      content,
+      content_type: 'text',
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0,
+      model_used: null,
+      tool_calls: null,
+      metadata_json: null,
+      created_at: new Date().toISOString(),
+    }
+    // 立即显示用户消息
+    set({ messages: [...prevMessages, userMessage], sending: true, streamingText: '' })
+
+    const abort = chatStream(
+      {
+        model,
+        messages: [{ role: 'user', content }],
+      },
+      {
+        onChunk: (text) => {
+          set({ streamingText: get().streamingText + text })
+        },
+        onDone: async (fullText) => {
+          const assistantMsg: convApi.MessageInfo = {
+            id: `msg_${Date.now()}`,
+            conversation_id: conversationId,
+            role: 'assistant',
+            content: fullText,
+            content_type: 'text',
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            total_tokens: 0,
+            model_used: model,
+            tool_calls: null,
+            metadata_json: null,
+            created_at: new Date().toISOString(),
+          }
+          set({
+            messages: [...get().messages, assistantMsg],
+            sending: false,
+            streamingText: '',
+            abortStream: null,
+          })
+          // 刷新消息列表
+          await get().fetchMessages(conversationId)
+        },
+        onError: (err) => {
+          set({ sending: false, streamingText: '', abortStream: null })
+          console.error('Chat stream error:', err)
+        },
+      },
+    )
+    set({ abortStream: abort })
+  },
+
+  stopStream: () => {
+    const abort = get().abortStream
+    if (abort) {
+      abort()
+      set({ sending: false, streamingText: '', abortStream: null })
+    }
+  },
+
+  // 以下方法由 WebSocket 模式调用，统一流式状态管理
+  startStream: () => {
+    set({ sending: true, streamingText: '' })
+  },
+
+  appendStream: (text) => {
+    set({ streamingText: get().streamingText + text })
+  },
+
+  finishStream: async (conversationId, fullText) => {
+    const assistantMsg: convApi.MessageInfo = {
+      id: `msg_${Date.now()}`,
+      conversation_id: conversationId,
+      role: 'assistant',
+      content: fullText,
+      content_type: 'text',
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0,
+      model_used: null,
+      tool_calls: null,
+      metadata_json: null,
+      created_at: new Date().toISOString(),
+    }
+    set({
+      messages: [...get().messages, assistantMsg],
+      sending: false,
+      streamingText: '',
+      abortStream: null,
+    })
+    await get().fetchMessages(conversationId)
+  },
+
+  resetStream: () => {
+    set({ sending: false, streamingText: '', abortStream: null })
+  },
+
+  setTransportMode: (mode) => {
+    set({ transportMode: mode })
   },
 
   setSearch: (search) => {
