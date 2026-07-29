@@ -3,11 +3,12 @@ Agent Pydantic Schema - 请求/响应数据模型
 """
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class AgentCreate(BaseModel):
     """创建 Agent 请求"""
+    model_config = ConfigDict(protected_namespaces=())
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
     avatar: Optional[str] = None
@@ -27,6 +28,7 @@ class AgentCreate(BaseModel):
 
 class AgentUpdate(BaseModel):
     """更新 Agent 请求（所有字段可选）"""
+    model_config = ConfigDict(protected_namespaces=())
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
     avatar: Optional[str] = None
@@ -44,6 +46,7 @@ class AgentUpdate(BaseModel):
 
 class AgentResponse(BaseModel):
     """Agent 信息响应"""
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
     id: str
     name: str
     description: Optional[str] = None
@@ -63,8 +66,6 @@ class AgentResponse(BaseModel):
     created_by: str
     created_at: datetime
     updated_at: Optional[datetime] = None
-
-    model_config = {"from_attributes": True}
 
 
 class AgentListResponse(BaseModel):

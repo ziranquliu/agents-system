@@ -104,3 +104,37 @@ export async function updateAgentStatus(id: string, status: string) {
   })
   return data
 }
+
+/* ── 本地 Agent 发现 ──────────────────────────────────── */
+
+export interface DiscoveredModel {
+  source: string
+  source_name: string
+  model_name: string
+  provider: string
+  size?: number
+  endpoint: string
+}
+
+export interface DiscoverResponse {
+  items: DiscoveredModel[]
+  total: number
+  message: string
+}
+
+/** 扫描本地 AI 服务，发现可用模型 */
+export async function discoverAgents() {
+  const { data } = await client.post<DiscoverResponse>('/discover/agents')
+  return data
+}
+
+/** 将发现的模型注册为 Agent */
+export async function registerDiscoveredAgent(params: {
+  model_name: string
+  provider?: string
+  endpoint?: string
+  workspace_id?: string
+}) {
+  const { data } = await client.post('/discover/agents/register', null, { params })
+  return data
+}

@@ -7,7 +7,9 @@ export interface WorkspaceInfo {
   name: string
   description: string | null
   owner_id: string
+  owner_name: string | null
   member_count: number
+  agent_count: number
   is_active: boolean
   created_at: string
   updated_at: string | null

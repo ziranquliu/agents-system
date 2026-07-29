@@ -3,11 +3,12 @@
 """
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class ModelConfigCreate(BaseModel):
     """创建模型配置模板"""
+    model_config = ConfigDict(protected_namespaces=())
     name: str = Field(..., min_length=1, max_length=100)
     provider: str = Field(..., description="Provider: openai, ollama, deepseek, glm, qwen")
     model_name: str = Field(..., min_length=1)
@@ -23,6 +24,7 @@ class ModelConfigCreate(BaseModel):
 
 class ModelConfigUpdate(BaseModel):
     """更新模型配置模板"""
+    model_config = ConfigDict(protected_namespaces=())
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     provider: Optional[str] = None
     model_name: Optional[str] = None
@@ -54,11 +56,12 @@ class ModelConfigResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
 
 class ModelTestRequest(BaseModel):
     """模型测试请求"""
+    model_config = ConfigDict(protected_namespaces=())
     messages: Optional[list[dict]] = Field(
         None,
         description="测试消息，默认使用 'Say hello'"

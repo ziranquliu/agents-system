@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAgentStore } from '../stores/agentStore'
-import type { AgentCreatePayload } from '../api/agents'
+import type { AgentCreatePayload, DiscoveredModel } from '../api/agents'
+import { discoverAgents, registerDiscoveredAgent } from '../api/agents'
 import { Loading, Empty, ErrorBlock, Pagination } from '../components/ui'
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -25,6 +26,11 @@ export default function Agents() {
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState<AgentCreatePayload>({ name: '', description: '', status: 'draft' })
   const [createError, setCreateError] = useState('')
+  const [showDiscover, setShowDiscover] = useState(false)
+  const [discovered, setDiscovered] = useState<DiscoveredModel[]>([])
+  const [discovering, setDiscovering] = useState(false)
+  const [discoverError, setDiscoverError] = useState('')
+  const [registeringIds, setRegisteringIds] = useState<Set<string>>(new Set())
 
   useEffect(() => { fetchAgents() }, [])
 
@@ -51,6 +57,37 @@ export default function Agents() {
     }
   }
 
+  const handleDiscover = async () => {
+    setDiscovering(true)
+    setDiscoverError('')
+    setShowDiscover(true)
+    try {
+      const res = await discoverAgents()
+      setDiscovered(res.items)
+    } catch (err: any) {
+      setDiscoverError(err?.response?.data?.detail || '扫描失败，请确认后端已重启')
+      setDiscovered([])
+    } finally {
+      setDiscovering(false)
+    }
+  }
+
+  const handleRegister = async (model: DiscoveredModel) => {
+    setRegisteringIds((prev) => new Set(prev).add(model.model_name))
+    try {
+      await registerDiscoveredAgent({
+        model_name: model.model_name,
+        provider: model.provider,
+        endpoint: model.endpoint,
+      })
+      fetchAgents()
+    } catch (err: any) {
+      alert(err?.response?.data?.detail || '注册失败')
+    } finally {
+      setRegisteringIds((prev) => { const next = new Set(prev); next.delete(model.model_name); return next })
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -58,9 +95,14 @@ export default function Agents() {
           <h1 className="text-2xl font-bold text-gray-900">Agent 管理</h1>
           <p className="text-gray-500 mt-1">管理所有智能体实例</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-          <span>+</span><span>创建 Agent</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={handleDiscover} className="px-4 py-2 border border-blue-200 text-blue-600 hover:bg-blue-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+            <span>🔍</span><span>发现本地 Agent</span>
+          </button>
+          <button onClick={() => setShowCreate(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+            <span>+</span><span>创建 Agent</span>
+          </button>
+        </div>
       </div>
 
       {showCreate && (
@@ -161,5 +203,60 @@ export default function Agents() {
         )}
       </div>
     </div>
+
+    {/* Agent 发现 Modal */}
+    {showDiscover && (
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowDiscover(false)}>
+        <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between p-5 border-b border-gray-100">
+            <h2 className="text-lg font-semibold text-gray-900">发现本地 Agent</h2>
+            <button onClick={() => setShowDiscover(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          </div>
+          <div className="p-5 overflow-y-auto flex-1">
+            {discovering ? (
+              <div className="flex flex-col items-center gap-3 py-12">
+                <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                <p className="text-sm text-gray-500">正在扫描本地 AI 服务...</p>
+              </div>
+            ) : discoverError ? (
+              <div className="text-center py-8">
+                <p className="text-red-500 text-sm mb-2">{discoverError}</p>
+                <p className="text-gray-400 text-xs">请确认已启动 Ollama 服务并重启后端</p>
+              </div>
+            ) : discovered.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-2">未发现本地运行的 AI 模型</p>
+                <p className="text-gray-400 text-xs">请启动 Ollama 后重试 (http://localhost:11434)</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {discovered.map((m) => (
+                  <div key={m.model_name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{m.model_name}</p>
+                      <div className="flex gap-3 mt-1">
+                        <span className="text-xs text-gray-500">{m.provider}</span>
+                        <span className="text-xs text-gray-400">|</span>
+                        <span className="text-xs text-gray-500 truncate">{m.source_name}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRegister(m)}
+                      disabled={registeringIds.has(m.model_name)}
+                      className="ml-4 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      {registeringIds.has(m.model_name) ? '注册中...' : '注册为 Agent'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="p-4 border-t border-gray-100 flex justify-end">
+            <button onClick={() => setShowDiscover(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium">关闭</button>
+          </div>
+        </div>
+      </div>
+    )}
   )
 }

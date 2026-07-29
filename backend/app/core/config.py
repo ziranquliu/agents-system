@@ -2,7 +2,7 @@
 应用配置管理 - 基于 pydantic-settings 的环境变量加载
 """
 import secrets
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Optional
 
 
@@ -69,9 +69,7 @@ class Settings(BaseSettings):
     # Model Providers
     MODEL_PROVIDERS: List[str] = ["openai", "ollama", "openrouter"]
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
 settings = Settings()

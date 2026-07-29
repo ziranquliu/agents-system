@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -170,7 +170,7 @@ async def _stream_response(adapter, messages: list[dict], data: ChatCompletionRe
 
 @router.post("/embeddings")
 async def create_embeddings(
-    input_texts: list[str] = Field(..., min_length=1, max_length=100),
+    input_texts: list[str] = Body(..., min_length=1, max_length=100),
     model: str = Query("text-embedding-3-small"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

@@ -14,6 +14,62 @@ from app.schemas.model import ModelConfigCreate, ModelConfigUpdate
 from app.services.llm import create_adapter
 
 
+# ── 辅助: config JSON ↔ 字段映射 ──────────────────────────────
+
+CONFIG_FIELDS = [
+    "endpoint", "api_key", "temperature",
+    "max_tokens", "context_window", "embedding_model",
+]
+
+
+def _config_to_dict(template: ModelConfigTemplate) -> dict:
+    """将 ORM 的 model/config 字段展开为完整 dict（供 response 使用）"""
+    cfg = {}
+    if template.config:
+        try:
+            cfg = json.loads(template.config)
+        except (json.JSONDecodeError, TypeError):
+            cfg = {}
+    return {
+        "id": template.id,
+        "name": template.name,
+        "description": template.description,
+        "provider": template.provider,
+        "model_name": template.model,  # ORM 字段名叫 model，schema 叫 model_name
+        "endpoint": cfg.get("endpoint", ""),
+        "api_key_masked": _mask_api_key(cfg.get("api_key", "")),
+        "temperature": cfg.get("temperature"),
+        "max_tokens": cfg.get("max_tokens"),
+        "context_window": cfg.get("context_window"),
+        "embedding_model": cfg.get("embedding_model"),
+        "is_default": template.is_default or False,
+        "created_by": template.created_by,
+        "created_at": template.created_at,
+        "updated_at": template.updated_at,
+    }
+
+
+def _mask_api_key(api_key: str) -> Optional[str]:
+    """脱敏 API Key"""
+    if not api_key:
+        return None
+    if len(api_key) <= 8:
+        return api_key[:2] + "***" + api_key[-1:]
+    return api_key[:4] + "***" + api_key[-4:]
+
+
+def _build_config_json(data) -> str:
+    """从 schema 中提取 config 字段并序列化为 JSON"""
+    cfg = {}
+    for field in CONFIG_FIELDS:
+        val = getattr(data, field, None)
+        if val is not None:
+            cfg[field] = val
+    return json.dumps(cfg, ensure_ascii=False)
+
+
+# ── CRUD ──────────────────────────────────────────────────────
+
 async def list_templates(
     db: AsyncSession,
     page: int = 1,
@@ -31,7 +87,7 @@ async def list_templates(
         query = query.where(
             or_(
                 ModelConfigTemplate.name.ilike(f"%{search}%"),
-                ModelConfigTemplate.model_name.ilike(f"%{search}%"),
+                ModelConfigTemplate.model.ilike(f"%{search}%"),
             )
         )
     if created_by:
@@ -41,7 +97,10 @@ async def list_templates(
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
 
-    query = query.order_by(ModelConfigTemplate.is_default.desc(), ModelConfigTemplate.created_at.desc())
+    query = query.order_by(
+        ModelConfigTemplate.is_default.desc(),
+        ModelConfigTemplate.created_at.desc(),
+    )
     query = query.offset((page - 1) * page_size).limit(page_size)
 
     result = await db.execute(query)
@@ -49,7 +108,9 @@ async def list_templates(
     return templates, total
 
 
-async def get_template(db: AsyncSession, template_id: str) -> Optional[ModelConfigTemplate]:
+async def get_template(
+    db: AsyncSession, template_id: str
+) -> Optional[ModelConfigTemplate]:
     """获取模板详情"""
     result = await db.execute(
         select(ModelConfigTemplate).where(ModelConfigTemplate.id == template_id)
@@ -67,13 +128,8 @@ async def create_template(
         id=str(uuid.uuid4()),
         name=data.name,
         provider=data.provider,
-        model_name=data.model_name,
-        endpoint=data.endpoint or "",
-        api_key=data.api_key or "",
-        temperature=data.temperature,
-        max_tokens=data.max_tokens,
-        context_window=data.context_window,
-        embedding_model=data.embedding_model,
+        model=data.model_name,  # schema → orm 字段名映射
+        config=_build_config_json(data),
         is_default=data.is_default,
         description=data.description,
         created_by=user_id,
@@ -94,8 +150,30 @@ async def update_template(
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+
+    # 处理直接字段映射
+    if "model_name" in update_data:
+        template.model = update_data.pop("model_name")
+
+    # 处理 config JSON 字段
+    config_dict = {}
+    if template.config:
+        try:
+            config_dict = json.loads(template.config)
+        except (json.JSONDecodeError, TypeError):
+            config_dict = {}
+
+    has_config_change = False
+    for field in CONFIG_FIELDS:
+        if field in update_data:
+            config_dict[field] = update_data.pop(field)
+            has_config_change = True
+
+    if has_config_change:
+        template.config = json.dumps(config_dict, ensure_ascii=False)
+
+    # 剩余的直接字段
     for field, value in update_data.items():
-        # api_key 如果为空字符串则不覆盖
         if field == "api_key" and not value:
             continue
         setattr(template, field, value)
@@ -124,11 +202,18 @@ async def test_template_connection(
     if not template:
         return {"success": False, "error": "Template not found"}
 
+    config_dict = {}
+    if template.config:
+        try:
+            config_dict = json.loads(template.config)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     config = {
         "provider": template.provider,
-        "endpoint": template.endpoint,
-        "api_key": template.api_key,
-        "model_name": template.model_name,
+        "endpoint": config_dict.get("endpoint", ""),
+        "api_key": config_dict.get("api_key", ""),
+        "model_name": template.model,
     }
 
     try:

@@ -82,11 +82,7 @@ async def seed():
                 name="GPT-4o-mini",
                 provider="openai",
                 model="gpt-4o-mini",
-                endpoint="https://api.openai.com/v1",
-                api_key="",
-                temperature=0.7,
-                max_tokens=16384,
-                context_window=128000,
+                config='{"endpoint": "https://api.openai.com/v1", "api_key": "", "temperature": 0.7, "max_tokens": 16384, "context_window": 128000}',
                 is_default=True,
                 description="OpenAI GPT-4o-mini，快速且经济的对话模型",
                 created_by="user_admin",
@@ -96,11 +92,7 @@ async def seed():
                 name="DeepSeek-V3",
                 provider="deepseek",
                 model="deepseek-chat",
-                endpoint="https://api.deepseek.com/v1",
-                api_key="",
-                temperature=0.7,
-                max_tokens=8192,
-                context_window=65536,
+                config='{"endpoint": "https://api.deepseek.com/v1", "api_key": "", "temperature": 0.7, "max_tokens": 8192, "context_window": 65536}',
                 is_default=False,
                 description="DeepSeek-V3，高性价比的国产大模型",
                 created_by="user_admin",
@@ -110,11 +102,7 @@ async def seed():
                 name="Ollama 本地模型",
                 provider="ollama",
                 model="qwen2.5:7b",
-                endpoint="http://localhost:11434/v1",
-                api_key="ollama",
-                temperature=0.7,
-                max_tokens=4096,
-                context_window=32768,
+                config='{"endpoint": "http://localhost:11434/v1", "api_key": "ollama", "temperature": 0.7, "max_tokens": 4096, "context_window": 32768}',
                 is_default=False,
                 description="本地运行的 Ollama 模型",
                 created_by="user_admin",
@@ -268,10 +256,10 @@ async def seed():
 
         # 绑定 Skill 到 Agent
         bindings = [
-            SkillBinding(id=f"bind_{i}", agent_id="agent_helper", skill_id="skill_web", enabled=True),
-            SkillBinding(id=f"bind_{i+1}", agent_id="agent_coder", skill_id="skill_code", enabled=True),
-            SkillBinding(id=f"bind_{i+2}", agent_id="agent_writer", skill_id="skill_translate", enabled=True),
-            SkillBinding(id=f"bind_{i+3}", agent_id="agent_analyst", skill_id="skill_search", enabled=True),
+            SkillBinding(agent_id="agent_helper", skill_id="skill_web", enabled=True),
+            SkillBinding(agent_id="agent_coder", skill_id="skill_code", enabled=True),
+            SkillBinding(agent_id="agent_writer", skill_id="skill_translate", enabled=True),
+            SkillBinding(agent_id="agent_analyst", skill_id="skill_search", enabled=True),
         ]
         for i, b in enumerate(bindings):
             b.id = f"bind_{i}"
@@ -331,7 +319,6 @@ async def seed():
                 description="个人智能体实验场",
                 owner_id="user_admin",
                 is_active=True,
-                agent_count=3,
                 member_count=1,
             ),
             Workspace(
@@ -340,7 +327,6 @@ async def seed():
                 description="多人共享的智能体工作区",
                 owner_id="user_admin",
                 is_active=True,
-                agent_count=2,
                 member_count=2,
             ),
         ]

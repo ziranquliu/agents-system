@@ -48,35 +48,35 @@ export async function listMCPServers(params?: {
   status?: string
   protocol?: string
 }) {
-  const { data } = await client.get<MCPServerListResponse>('/mcp/', { params })
+  const { data } = await client.get<MCPServerListResponse>('/mcp-servers/', { params })
   return data
 }
 
 /** 获取单个 MCP 服务 */
 export async function getMCPServer(id: string) {
-  const { data } = await client.get<MCPServerInfo>(`/mcp/${id}`)
+  const { data } = await client.get<MCPServerInfo>(`/mcp-servers/${id}`)
   return data
 }
 
 /** 创建 MCP 服务 */
 export async function createMCPServer(payload: MCPServerCreatePayload) {
-  const { data } = await client.post<MCPServerInfo>('/mcp/', payload)
+  const { data } = await client.post<MCPServerInfo>('/mcp-servers/', payload)
   return data
 }
 
 /** 更新 MCP 服务 */
 export async function updateMCPServer(id: string, payload: MCPServerUpdatePayload) {
-  const { data } = await client.put<MCPServerInfo>(`/mcp/${id}`, payload)
+  const { data } = await client.put<MCPServerInfo>(`/mcp-servers/${id}`, payload)
   return data
 }
 
 /** 删除 MCP 服务 */
 export async function deleteMCPServer(id: string) {
-  await client.delete(`/mcp/${id}`)
+  await client.delete(`/mcp-servers/${id}`)
 }
 
 /** 健康检查 */
 export async function checkMCPHealth(id: string) {
-  const { data } = await client.post<MCPServerInfo>(`/mcp/${id}/health-check`)
+  const { data } = await client.post<MCPServerInfo>(`/mcp-servers/${id}/health-check`)
   return data
 }
