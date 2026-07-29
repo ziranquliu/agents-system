@@ -8,6 +8,8 @@ const navItems = [
   { path: '/skills', label: 'Skill \u7BA1\u7406', icon: '\uD83D\uDD27' },
   { path: '/mcp', label: 'MCP \u670D\u52A1', icon: '\uD83D\uDD0C' },
   { path: '/workspaces', label: '\u5DE5\u4F5C\u7A7A\u95F4', icon: '\uD83D\uDCC1' },
+  { path: '/users', label: '\u7528\u6237\u7BA1\u7406', icon: '\uD83D\uDC64' },
+  { path: '/operation-logs', label: '\u64CD\u4F5C\u65E5\u5FD7', icon: '\uD83D\uDCDD' },
 ]
 
 export default function Sidebar() {

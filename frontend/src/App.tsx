@@ -8,7 +8,9 @@ import ConversationDetail from './pages/ConversationDetail'
 import Models from './pages/Models'
 import Skills from './pages/Skills'
 import MCPServers from './pages/MCPServers'
+import Users from './pages/Users'
 import Workspaces from './pages/Workspaces'
+import OperationLogs from './pages/OperationLogs'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 
@@ -27,6 +29,8 @@ function App() {
         <Route path="skills" element={<Skills />} />
         <Route path="mcp" element={<MCPServers />} />
         <Route path="workspaces" element={<Workspaces />} />
+        <Route path="users" element={<Users />} />
+        <Route path="operation-logs" element={<OperationLogs />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
