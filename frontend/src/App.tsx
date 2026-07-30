@@ -24,6 +24,7 @@ import ConversationEnhancement from './pages/ConversationEnhancement'
 import KnowledgePage from './pages/KnowledgePage'
 import TaskPage from './pages/TaskPage'
 import AgentMemoryPage from './pages/AgentMemoryPage'
+import ModelTemplatePage from './pages/ModelTemplatePage'
 import SystemMonitorPage from './pages/SystemMonitorPage'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
@@ -44,6 +45,7 @@ function App() {
         <Route path="skill-market" element={<SkillMarket />} />
         <Route path="agent-market" element={<AgentMarket />} />
         <Route path="model-market" element={<ModelMarket />} />
+        <Route path="model-templates" element={<ModelTemplatePage />} />
         <Route path="mcp" element={<MCPServers />} />
         <Route path="mcp-market" element={<MCPMarket />} />
         <Route path="workspaces" element={<Workspaces />} />
