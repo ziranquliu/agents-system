@@ -15,6 +15,7 @@ import MCPServers from './pages/MCPServers'
 import Users from './pages/Users'
 import Workspaces from './pages/Workspaces'
 import OperationLogs from './pages/OperationLogs'
+import ScannerDashboard from './pages/ScannerDashboard'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 
@@ -39,6 +40,7 @@ function App() {
         <Route path="workspaces" element={<Workspaces />} />
         <Route path="users" element={<Users />} />
         <Route path="operation-logs" element={<OperationLogs />} />
+        <Route path="scanner" element={<ScannerDashboard />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
