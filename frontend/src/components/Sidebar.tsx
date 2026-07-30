@@ -22,6 +22,7 @@ const navItems = [
   { path: '/conversation-enhancement', label: '\u4F1A\u8BDD\u589E\u5F3A', icon: '\uD83D\uDCDD' },
   { path: '/knowledge', label: '\u77E5\u8BC6\u5E93', icon: '\uD83D\uDCDA' },
   { path: '/tasks', label: '\u4EFB\u52A1\u7BA1\u7406', icon: '\u2705' },
+  { path: '/agent-memory', label: '\u8BB0\u5FC6\u7BA1\u7406', icon: '\uD83E\uDDE0' },
   { path: '/system-monitor', label: '\u7CFB\u7EDF\u76D1\u63A7', icon: '\uD83D\uDCCA' },
 ]
 

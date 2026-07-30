@@ -12,3 +12,4 @@ from app.models.scanner import ComponentScan, ComponentScanItem
 from app.models.collaboration import Collaboration, CollaborationTask
 from app.models.knowledge import KnowledgeBase, KnowledgeDocument, KnowledgeChunk
 from app.models.task import Task
+from app.models.memory import AgentMemory, MemoryAnalytics
