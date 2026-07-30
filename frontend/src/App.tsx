@@ -20,6 +20,7 @@ import UpdateCenter from './pages/UpdateCenter'
 import CollaborationsPage from './pages/CollaborationsPage'
 import SkillOptimization from './pages/SkillOptimization'
 import MCPOptimization from './pages/MCPOptimization'
+import ConversationEnhancement from './pages/ConversationEnhancement'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 
@@ -49,6 +50,7 @@ function App() {
         <Route path="collaborations" element={<CollaborationsPage />} />
         <Route path="skill-optimization" element={<SkillOptimization />} />
         <Route path="mcp-optimization" element={<MCPOptimization />} />
+        <Route path="conversation-enhancement" element={<ConversationEnhancement />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
