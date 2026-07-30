@@ -1,6 +1,6 @@
 """API v1 路由聚合"""
 from fastapi import APIRouter
-from app.api.v1 import auth, agents, models, chat, conversations, skills, workspaces, mcp_servers, discovery, operation_logs, users, mcp_market, skill_market, agent_market, model_market, scanner, updates, collaborations
+from app.api.v1 import auth, agents, models, chat, conversations, skills, workspaces, mcp_servers, discovery, operation_logs, users, mcp_market, skill_market, agent_market, model_market, scanner, updates, collaborations, skill_optimization
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -22,3 +22,4 @@ api_router.include_router(model_market.router, tags=["模型在线市场"])
 api_router.include_router(scanner.router, tags=["组件扫描器"])
 api_router.include_router(updates.router, tags=["更新检测"])
 api_router.include_router(collaborations.router, tags=["多智能体协作"])
+api_router.include_router(skill_optimization.router, tags=["Skill 优化"])

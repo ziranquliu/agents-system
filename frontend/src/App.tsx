@@ -18,6 +18,7 @@ import OperationLogs from './pages/OperationLogs'
 import ScannerDashboard from './pages/ScannerDashboard'
 import UpdateCenter from './pages/UpdateCenter'
 import CollaborationsPage from './pages/CollaborationsPage'
+import SkillOptimization from './pages/SkillOptimization'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 
@@ -45,6 +46,7 @@ function App() {
         <Route path="scanner" element={<ScannerDashboard />} />
         <Route path="updates" element={<UpdateCenter />} />
         <Route path="collaborations" element={<CollaborationsPage />} />
+        <Route path="skill-optimization" element={<SkillOptimization />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
