@@ -14,3 +14,4 @@ from app.models.knowledge import KnowledgeBase, KnowledgeDocument, KnowledgeChun
 from app.models.task import Task
 from app.models.memory import AgentMemory, MemoryAnalytics
 from app.models.model_template import ModelTemplateVersion, ModelTemplateBinding
+from app.models.batch_install import BatchInstallQueue, BatchInstallItem

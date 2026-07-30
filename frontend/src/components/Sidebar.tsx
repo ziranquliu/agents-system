@@ -6,6 +6,7 @@ const navItems = [
   { path: '/conversations', label: '\u5BF9\u8BDD\u7BA1\u7406', icon: '\uD83D\uDCAC' },
   { path: '/models', label: '\u6A21\u578B\u914D\u7F6E', icon: '\uD83E\uDDE0' },
   { path: '/skills', label: 'Skill \u7BA1\u7406', icon: '\uD83D\uDD27' },
+  { path: '/batch-install', label: '\u6279\u91CF\u5B89\u88C5', icon: '\uD83D\uDCE6' },
   { path: '/skill-market', label: '  Skill \u5E02\u573A', icon: '\uD83D\uDED2' },
   { path: '/agent-market', label: '  Agent \u5E02\u573A', icon: '\uD83E\uDDE0' },
   { path: '/model-market', label: '  \u6A21\u578B\u5E02\u573A', icon: '\uD83E\uDDE0' },
