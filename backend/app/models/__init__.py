@@ -15,3 +15,4 @@ from app.models.task import Task
 from app.models.memory import AgentMemory, MemoryAnalytics
 from app.models.model_template import ModelTemplateVersion, ModelTemplateBinding
 from app.models.batch_install import BatchInstallQueue, BatchInstallItem
+from app.models.skill_reuse import SkillReuseRelation
