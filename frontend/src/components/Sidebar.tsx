@@ -8,6 +8,7 @@ const navItems = [
   { path: '/skills', label: 'Skill \u7BA1\u7406', icon: '\uD83D\uDD27' },
   { path: '/skill-market', label: '  Skill \u5E02\u573A', icon: '\uD83D\uDED2' },
   { path: '/agent-market', label: '  Agent \u5E02\u573A', icon: '\uD83E\uDDE0' },
+  { path: '/model-market', label: '  \u6A21\u578B\u5E02\u573A', icon: '\uD83E\uDDE0' },
   { path: '/mcp', label: 'MCP \u670D\u52A1', icon: '\uD83D\uDD0C' },
   { path: '/mcp-market', label: '  MCP \u5E02\u573A', icon: '\uD83D\uDED2' },
   { path: '/workspaces', label: '\u5DE5\u4F5C\u7A7A\u95F4', icon: '\uD83D\uDCC1' },

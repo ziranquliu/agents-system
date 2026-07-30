@@ -9,6 +9,7 @@ import Models from './pages/Models'
 import SkillMarket from './pages/SkillMarket'
 import AgentMarket from './pages/AgentMarket'
 import MCPMarket from './pages/MCPMarket'
+import ModelMarket from './pages/ModelMarket'
 import Skills from './pages/Skills'
 import MCPServers from './pages/MCPServers'
 import Users from './pages/Users'
@@ -32,6 +33,7 @@ function App() {
         <Route path="skills" element={<Skills />} />
         <Route path="skill-market" element={<SkillMarket />} />
         <Route path="agent-market" element={<AgentMarket />} />
+        <Route path="model-market" element={<ModelMarket />} />
         <Route path="mcp" element={<MCPServers />} />
         <Route path="mcp-market" element={<MCPMarket />} />
         <Route path="workspaces" element={<Workspaces />} />
