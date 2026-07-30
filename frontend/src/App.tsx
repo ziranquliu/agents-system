@@ -23,6 +23,7 @@ import MCPOptimization from './pages/MCPOptimization'
 import ConversationEnhancement from './pages/ConversationEnhancement'
 import KnowledgePage from './pages/KnowledgePage'
 import TaskPage from './pages/TaskPage'
+import SystemMonitorPage from './pages/SystemMonitorPage'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 
@@ -55,6 +56,7 @@ function App() {
         <Route path="conversation-enhancement" element={<ConversationEnhancement />} />
         <Route path="knowledge" element={<KnowledgePage />} />
         <Route path="tasks" element={<TaskPage />} />
+        <Route path="system-monitor" element={<SystemMonitorPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
