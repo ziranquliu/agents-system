@@ -15,6 +15,7 @@ const navItems = [
   { path: '/users', label: '\u7528\u6237\u7BA1\u7406', icon: '\uD83D\uDC64' },
   { path: '/operation-logs', label: '\u64CD\u4F5C\u65E5\u5FD7', icon: '\uD83D\uDCDD' },
   { path: '/scanner', label: '\u7EC4\u4EF6\u626B\u63CF', icon: '\uD83D\uDD0D' },
+  { path: '/updates', label: '\u66F4\u65B0\u68C0\u6D4B', icon: '\uD83D\uDD04' },
 ]
 
 export default function Sidebar() {
