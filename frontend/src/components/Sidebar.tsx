@@ -18,6 +18,7 @@ const navItems = [
   { path: '/updates', label: '\u66F4\u65B0\u68C0\u6D4B', icon: '\uD83D\uDD04' },
   { path: '/collaborations', label: '\u534F\u4F5C\u7BA1\u7406', icon: '\uD83E\uDD1D' },
   { path: '/skill-optimization', label: 'Skill \u4F18\u5316', icon: '\u26A1' },
+  { path: '/mcp-optimization', label: 'MCP \u4F18\u5316', icon: '\uD83D\uDD0C' },
 ]
 
 export default function Sidebar() {
