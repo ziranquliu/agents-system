@@ -29,6 +29,7 @@ const navItems = [
   { path: '/tasks', label: '\u4EFB\u52A1\u7BA1\u7406', icon: '\u2705' },
   { path: '/agent-memory', label: '\u8BB0\u5FC6\u7BA1\u7406', icon: '\uD83E\uDDE0' },
   { path: '/system-monitor', label: '\u7CFB\u7EDF\u76D1\u63A7', icon: '\uD83D\uDCCA' },
+  { path: '/monitoring', label: '\u76D1\u63A7\u770B\u677F', icon: '\uD83D\uDCCA' },
 ]
 
 export default function Sidebar() {

@@ -29,6 +29,7 @@ import BatchInstallPage from './pages/BatchInstallPage'
 import SkillReusePage from './pages/SkillReusePage'
 import MCPBatchPage from './pages/MCPBatchPage'
 import DialogueEnhancementPage from './pages/DialogueEnhancementPage'
+import MonitoringDashboardPage from './pages/MonitoringDashboardPage'
 import SystemMonitorPage from './pages/SystemMonitorPage'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
@@ -65,6 +66,7 @@ function App() {
         <Route path="mcp-optimization" element={<MCPOptimization />} />
         <Route path="conversation-enhancement" element={<ConversationEnhancement />} />
         <Route path="dialogue-enhancement" element={<DialogueEnhancementPage />} />
+        <Route path="monitoring" element={<MonitoringDashboardPage />} />
         <Route path="knowledge" element={<KnowledgePage />} />
         <Route path="tasks" element={<TaskPage />} />
         <Route path="agent-memory" element={<AgentMemoryPage />} />
