@@ -17,6 +17,7 @@ import Workspaces from './pages/Workspaces'
 import OperationLogs from './pages/OperationLogs'
 import ScannerDashboard from './pages/ScannerDashboard'
 import UpdateCenter from './pages/UpdateCenter'
+import CollaborationsPage from './pages/CollaborationsPage'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 
@@ -43,6 +44,7 @@ function App() {
         <Route path="operation-logs" element={<OperationLogs />} />
         <Route path="scanner" element={<ScannerDashboard />} />
         <Route path="updates" element={<UpdateCenter />} />
+        <Route path="collaborations" element={<CollaborationsPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

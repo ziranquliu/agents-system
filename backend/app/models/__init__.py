@@ -9,3 +9,4 @@ from app.models.conversation import Conversation, Message
 from app.models.workspace import Workspace, WorkspaceMember
 from app.models.skill import Skill, SkillBinding, MCPServer
 from app.models.scanner import ComponentScan, ComponentScanItem
+from app.models.collaboration import Collaboration, CollaborationTask
