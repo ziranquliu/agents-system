@@ -24,6 +24,7 @@ const navItems = [
   { path: '/skill-optimization', label: 'Skill \u4F18\u5316', icon: '\u26A1' },
   { path: '/mcp-optimization', label: 'MCP \u4F18\u5316', icon: '\uD83D\uDD0C' },
   { path: '/conversation-enhancement', label: '\u4F1A\u8BDD\u589E\u5F3A', icon: '\uD83D\uDCDD' },
+  { path: '/dialogue-enhancement', label: '\u5BF9\u8BDD\u589E\u5F3A', icon: '\uD83D\uDCAC' },
   { path: '/knowledge', label: '\u77E5\u8BC6\u5E93', icon: '\uD83D\uDCDA' },
   { path: '/tasks', label: '\u4EFB\u52A1\u7BA1\u7406', icon: '\u2705' },
   { path: '/agent-memory', label: '\u8BB0\u5FC6\u7BA1\u7406', icon: '\uD83E\uDDE0' },

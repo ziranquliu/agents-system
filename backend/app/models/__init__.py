@@ -17,3 +17,4 @@ from app.models.model_template import ModelTemplateVersion, ModelTemplateBinding
 from app.models.batch_install import BatchInstallQueue, BatchInstallItem
 from app.models.skill_reuse import SkillReuseRelation
 from app.models.mcp_batch import MCPAgentBinding, MCPBatchInstallQueue, MCPBatchInstallItem
+from app.models.dialogue_enhancement import HumanIntervention, DialogueRating, RatingAnalytics
