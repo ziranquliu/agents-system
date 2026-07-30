@@ -27,6 +27,7 @@ import AgentMemoryPage from './pages/AgentMemoryPage'
 import ModelTemplatePage from './pages/ModelTemplatePage'
 import BatchInstallPage from './pages/BatchInstallPage'
 import SkillReusePage from './pages/SkillReusePage'
+import MCPBatchPage from './pages/MCPBatchPage'
 import SystemMonitorPage from './pages/SystemMonitorPage'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
@@ -46,6 +47,7 @@ function App() {
         <Route path="skills" element={<Skills />} />
         <Route path="batch-install" element={<BatchInstallPage />} />
         <Route path="skill-reuse" element={<SkillReusePage />} />
+        <Route path="mcp-batch" element={<MCPBatchPage />} />
         <Route path="skill-market" element={<SkillMarket />} />
         <Route path="agent-market" element={<AgentMarket />} />
         <Route path="model-market" element={<ModelMarket />} />

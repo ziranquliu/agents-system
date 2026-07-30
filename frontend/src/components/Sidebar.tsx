@@ -13,6 +13,7 @@ const navItems = [
   { path: '/model-market', label: '  \u6A21\u578B\u5E02\u573A', icon: '\uD83E\uDDE0' },
   { path: '/model-templates', label: '\u6A21\u578B\u6A21\u677F', icon: '\u2699\uFE0F' },
   { path: '/mcp', label: 'MCP \u670D\u52A1', icon: '\uD83D\uDD0C' },
+  { path: '/mcp-batch', label: 'MCP\u6279\u91CF\u5B89\u88C5', icon: '\u26A1' },
   { path: '/mcp-market', label: '  MCP \u5E02\u573A', icon: '\uD83D\uDED2' },
   { path: '/workspaces', label: '\u5DE5\u4F5C\u7A7A\u95F4', icon: '\uD83D\uDCC1' },
   { path: '/users', label: '\u7528\u6237\u7BA1\u7406', icon: '\uD83D\uDC64' },
