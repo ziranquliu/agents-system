@@ -22,6 +22,7 @@ import SkillOptimization from './pages/SkillOptimization'
 import MCPOptimization from './pages/MCPOptimization'
 import ConversationEnhancement from './pages/ConversationEnhancement'
 import KnowledgePage from './pages/KnowledgePage'
+import TaskPage from './pages/TaskPage'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 
@@ -53,6 +54,7 @@ function App() {
         <Route path="mcp-optimization" element={<MCPOptimization />} />
         <Route path="conversation-enhancement" element={<ConversationEnhancement />} />
         <Route path="knowledge" element={<KnowledgePage />} />
+        <Route path="tasks" element={<TaskPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
