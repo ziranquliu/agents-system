@@ -8,6 +8,10 @@ dist/
 build/
 .eggs/
 *.egg
+
+# Temp files
+commit_msg.txt
+*.bat
 .venv/
 venv/
 env/

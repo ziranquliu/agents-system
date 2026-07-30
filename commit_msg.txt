@@ -1,7 +1,0 @@
-feat(skill-reuse): cross-agent skill reuse with 3 modes
-
-Implement skill reuse across agents with direct reference, copy, and template modes (4.4.6).
-
-Backend: models/skill_reuse.py, services/skill_reuse_service.py (CRUD, sync, graph, stats, ranking), api/v1/skill_reuse.py
-Frontend: api/skillReuse.ts, pages/SkillReusePage.tsx (list/create/sync/stats tabs)
-Router + Sidebar registration
