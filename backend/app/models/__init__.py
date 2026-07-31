@@ -37,3 +37,6 @@ from app.models.audit import (
     AuditLog, AuditArchive, AuditRule, AuditAlert, AuditConfig,
     AuditCategory, AuditResult, AnomalyType, AlertSeverity,
 )
+from app.models.token import (
+    TokenUsage, TokenBudget, TokenAlert, ModelCascadeRule, TokenOptimizationStat,
+)
