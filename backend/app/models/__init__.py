@@ -33,3 +33,7 @@ from app.models.health import (
     HealthTrendPoint, HealthEvent, HealthLevel, CheckStatus,
     AgentHealthStatus,
 )
+from app.models.audit import (
+    AuditLog, AuditArchive, AuditRule, AuditAlert, AuditConfig,
+    AuditCategory, AuditResult, AnomalyType, AlertSeverity,
+)

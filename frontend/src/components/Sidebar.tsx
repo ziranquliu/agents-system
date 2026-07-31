@@ -33,6 +33,7 @@ const navItems = [
   { path: '/ops', label: '\u81EA\u52A8\u5316\u8FD0\u7EF4', icon: '\u2699\uFE0F' },
   { path: '/backup-enhanced', label: '\u5907\u4EFD\u4E0E\u6062\u590D\u589E\u5F3A', icon: '\uD83D\uDCDA' },
   { path: '/health', label: '\u5065\u5EB7\u76D1\u63A7', icon: '\uD83D\uDCAA' },
+  { path: '/audit', label: '\u64CD\u4F5C\u5BA1\u8BA1', icon: '\uD83D\uDD12' },
 ]
 
 export default function Sidebar() {
