@@ -19,3 +19,7 @@ from app.models.skill_reuse import SkillReuseRelation
 from app.models.mcp_batch import MCPAgentBinding, MCPBatchInstallQueue, MCPBatchInstallItem
 from app.models.dialogue_enhancement import HumanIntervention, DialogueRating, RatingAnalytics
 from app.models.monitoring import AgentMetric, AlertConfig, AlertRecord, DashboardPanel
+from app.models.ops import (
+    AgentDeployment, ScalingPolicy, ScalingEvent, LogEntry, LogCollectionConfig,
+    MaintenanceTask, MaintenanceExecution, SelfHealRecord, HealRule, OpsReport
+)
