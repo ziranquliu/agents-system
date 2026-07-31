@@ -45,7 +45,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         print(f"Startup error: {e}")
         raise
+    # 启动全局定时调度器（组件扫描/更新检测/维护/备份/审计归档等）
+    try:
+        from app.core.scheduler import start_scheduler
+        sched = start_scheduler()
+        print(f"[scheduler] started with {len(sched.get_jobs())} jobs")
+    except Exception as e:
+        print(f"[scheduler] start failed (non-fatal): {e}")
     yield
+    from app.core.scheduler import stop_scheduler
+    stop_scheduler()
     from app.db.session import close_db_connections
     await close_db_connections()
     print("Server shutdown complete")
