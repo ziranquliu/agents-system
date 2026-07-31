@@ -12,7 +12,72 @@ from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import async_session_factory
-from app.models.scanner import ComponentScan, ComponentScanItem
+from app.models.scanner import ComponentScan, ComponentScanItem, ScannerAlert
+
+
+async def _detect_changes_and_alert(db: AsyncSession, scan: ComponentScan) -> list[ScannerAlert]:
+    """变化检测：对比本次扫描与上一次扫描，对状态变化生成告警
+
+    规则：
+    - healthy -> warning: 降级告警（warning）
+    - healthy/warning -> error: 严重告警（critical）
+    - error -> healthy: 恢复通知（info）
+    """
+    # 获取本次扫描的所有条目
+    stmt = select(ComponentScanItem).where(ComponentScanItem.scan_id == scan.id)
+    current_items = (await db.execute(stmt)).scalars().all()
+
+    # 获取上一次扫描（排除本次）
+    prev_scan = (await db.execute(
+        select(ComponentScan)
+        .where(ComponentScan.id != scan.id, ComponentScan.status == "completed")
+        .order_by(ComponentScan.completed_at.desc())
+        .limit(1)
+    )).scalars().first()
+
+    if not prev_scan:
+        return []
+
+    prev_stmt = select(ComponentScanItem).where(ComponentScanItem.scan_id == prev_scan.id)
+    prev_items = (await db.execute(prev_stmt)).scalars().all()
+    prev_map = {(p.component_type, p.component_id): p for p in prev_items}
+
+    alerts: list[ScannerAlert] = []
+    for item in current_items:
+        prev = prev_map.get((item.component_type, item.component_id))
+        if not prev or prev.status == item.status:
+            continue  # 新增组件或状态未变化
+
+        changed_from = prev.status
+        changed_to = item.status
+
+        if changed_to == "error" and changed_from != "error":
+            severity = "critical"
+            message = f"[组件扫描] {item.component_name or item.component_id} ({item.component_type}) 状态异常: {changed_from} → {changed_to}"
+        elif changed_to == "warning" and changed_from == "healthy":
+            severity = "warning"
+            message = f"[组件扫描] {item.component_name or item.component_id} ({item.component_type}) 状态降级: {changed_from} → {changed_to}"
+        elif changed_to == "healthy" and changed_from in ("error", "warning"):
+            severity = "info"
+            message = f"[组件扫描] {item.component_name or item.component_id} ({item.component_type}) 已恢复: {changed_from} → {changed_to}"
+        else:
+            severity = "warning"
+            message = f"[组件扫描] {item.component_name or item.component_id} ({item.component_type}) 状态变化: {changed_from} → {changed_to}"
+
+        alert = ScannerAlert(
+            component_type=item.component_type,
+            component_id=item.component_id,
+            component_name=item.component_name,
+            previous_status=changed_from,
+            current_status=changed_to,
+            severity=severity,
+            message=message,
+            scan_id=scan.id,
+        )
+        db.add(alert)
+        alerts.append(alert)
+
+    return alerts
 
 
 async def trigger_scan(user_id: str = "system") -> ComponentScan:
@@ -62,6 +127,15 @@ async def trigger_scan(user_id: str = "system") -> ComponentScan:
         scan.completed_at = datetime.utcnow()
         scan.summary = json.dumps(totals, ensure_ascii=False)
         await db.flush()
+
+        # 变化检测与告警（对比上一次扫描）
+        try:
+            alerts = await _detect_changes_and_alert(db, scan)
+            if alerts:
+                scan.summary = json.dumps({**totals, "alerts": len(alerts)}, ensure_ascii=False)
+            await db.commit()
+        except Exception:
+            await db.rollback()
 
     return scan
 

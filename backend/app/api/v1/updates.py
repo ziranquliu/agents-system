@@ -66,8 +66,63 @@ async def apply_update(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """执行单个组件更新"""
+    """执行单个组件更新（自动保留快照）"""
     if component_type not in ("skill", "mcp", "agent", "model"):
         raise HTTPException(status_code=400, detail=f"不支持的组件类型: {component_type}")
-    result = await update_service.update_component(db, component_type, component_id)
+    result = await update_service.update_component(
+        db, component_type, component_id,
+        created_by=current_user.username if current_user else "manual",
+    )
     return result
+
+
+@router.post("/updates/batch")
+async def batch_apply_updates(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """批量更新：多组件排队执行，返回汇总报告"""
+    component_type = body.get("component_type")
+    ids = body.get("component_ids", [])
+    if component_type not in ("skill", "mcp", "agent", "model"):
+        raise HTTPException(status_code=400, detail=f"不支持的组件类型: {component_type}")
+    if not ids:
+        raise HTTPException(status_code=400, detail="component_ids 不能为空")
+    return await update_service.batch_update_components(
+        db, component_type, ids,
+        created_by=current_user.username if current_user else "manual",
+    )
+
+
+@router.get("/updates/snapshots")
+async def list_snapshots(
+    component_type: str | None = None,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+):
+    """更新快照列表（用于回滚）"""
+    return await update_service.list_snapshots(db, component_type=component_type, limit=limit)
+
+
+@router.post("/updates/rollback/{snapshot_id}")
+async def rollback_update(
+    snapshot_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """回滚组件到快照状态"""
+    return await update_service.rollback_component(
+        db, snapshot_id,
+        created_by=current_user.username if current_user else "manual",
+    )
+
+
+@router.get("/updates/logs")
+async def list_update_logs(
+    component_type: str | None = None,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+):
+    """更新操作日志（时间/变更/兼容性/回滚状态）"""
+    return await update_service.list_update_logs(db, component_type=component_type, limit=limit)

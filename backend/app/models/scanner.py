@@ -40,3 +40,20 @@ class ComponentScanItem(Base):
     scanned_at = Column(DateTime, default=datetime.utcnow)
 
     scan = relationship("ComponentScan", back_populates="items")
+
+
+class ScannerAlert(Base):
+    """扫描变化告警 — 上次扫描与本次扫描状态变化时生成"""
+    __tablename__ = "scanner_alerts"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    component_type = Column(String(20), index=True)  # agent / skill / mcp
+    component_id = Column(String(36), index=True)
+    component_name = Column(String(200), nullable=True)
+    previous_status = Column(String(20), nullable=True)
+    current_status = Column(String(20))
+    severity = Column(String(16), default="info")  # info / warning / critical
+    message = Column(Text, nullable=True)
+    scan_id = Column(String(36), nullable=True)
+    status = Column(String(16), default="open")  # open / acknowledged / resolved
+    created_at = Column(DateTime, default=datetime.utcnow)

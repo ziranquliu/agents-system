@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { triggerScan, getLatestScan, getScanResults, getScanHistory, cleanupOldScans, ScanSession, ScanItem } from '../api/scanner'
+import { triggerScan, getLatestScan, getScanResults, getScanHistory, cleanupOldScans, getScanAlerts, updateScanAlert, ScanSession, ScanItem, ScanAlert } from '../api/scanner'
 import { useToast } from '../components/ui'
 
 const ScannerDashboard: React.FC = () => {
@@ -7,6 +7,7 @@ const ScannerDashboard: React.FC = () => {
   const [scan, setScan] = useState<ScanSession | null>(null)
   const [items, setItems] = useState<ScanItem[]>([])
   const [history, setHistory] = useState<ScanSession[]>([])
+  const [alerts, setAlerts] = useState<ScanAlert[]>([])
   const [loading, setLoading] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [filterType, setFilterType] = useState<string>('')
@@ -25,6 +26,8 @@ const ScannerDashboard: React.FC = () => {
       }
       const hist = await getScanHistory(1, 10)
       setHistory(hist.scans)
+      const alertResp = await getScanAlerts({ page_size: 20 })
+      setAlerts(alertResp.items)
     } catch {
       toast.error('加载扫描数据失败')
     } finally {
@@ -84,6 +87,17 @@ const ScannerDashboard: React.FC = () => {
       loadData()
     } catch {
       toast.error('清理失败')
+    }
+  }
+
+  const handleAlertStatus = async (alertId: string, status: string) => {
+    try {
+      await updateScanAlert(alertId, status)
+      const alertResp = await getScanAlerts({ page_size: 20 })
+      setAlerts(alertResp.items)
+      toast.success('告警状态已更新')
+    } catch {
+      toast.error('更新告警状态失败')
     }
   }
 
@@ -264,6 +278,45 @@ const ScannerDashboard: React.FC = () => {
                     )}
                   </div>
                   <span className="text-xs text-gray-400">{h.triggered_by || 'system'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 变化告警 */}
+      <div className="mt-6">
+        <h3 className="font-semibold text-sm mb-3 text-gray-700">🚨 扫描变化告警（状态降级/异常/恢复）</h3>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          {alerts.length === 0 ? (
+            <div className="text-center py-6 text-gray-400 text-sm">暂无告警</div>
+          ) : (
+            <div className="divide-y">
+              {alerts.map(a => (
+                <div key={a.id} className="px-5 py-3 flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                      a.severity === 'critical' ? 'bg-red-100 text-red-700' :
+                      a.severity === 'warning' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+                    }`}>
+                      {a.severity === 'critical' ? '严重' : a.severity === 'warning' ? '警告' : '恢复'}
+                    </span>
+                    <span className="text-gray-600">{a.message}</span>
+                    <span className="text-xs text-gray-400">{a.component_name || a.component_id}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400">{a.created_at ? new Date(a.created_at).toLocaleString() : '-'}</span>
+                    <select
+                      value={a.status}
+                      onChange={e => handleAlertStatus(a.id, e.target.value)}
+                      className="text-xs border border-gray-300 rounded px-2 py-1"
+                    >
+                      <option value="open">未处理</option>
+                      <option value="acknowledged">已确认</option>
+                      <option value="resolved">已解决</option>
+                    </select>
+                  </div>
                 </div>
               ))}
             </div>

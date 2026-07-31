@@ -8,7 +8,7 @@ from app.models.agent import Agent, ModelConfigTemplate
 from app.models.conversation import Conversation, Message
 from app.models.workspace import Workspace, WorkspaceMember
 from app.models.skill import Skill, SkillBinding, MCPServer
-from app.models.scanner import ComponentScan, ComponentScanItem
+from app.models.scanner import ComponentScan, ComponentScanItem, ScannerAlert
 from app.models.collaboration import Collaboration, CollaborationTask
 from app.models.knowledge import KnowledgeBase, KnowledgeDocument, KnowledgeChunk
 from app.models.task import Task
@@ -40,3 +40,4 @@ from app.models.audit import (
 from app.models.token import (
     TokenUsage, TokenBudget, TokenAlert, ModelCascadeRule, TokenOptimizationStat,
 )
+from app.models.update_enhanced import UpdateSnapshot, UpdateLog

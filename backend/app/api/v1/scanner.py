@@ -101,6 +101,69 @@ async def cleanup_old_scans(
     return {"message": f"已清理旧记录", "deleted": deleted, "keep_count": keep_count}
 
 
+@router.get("/scanner/alerts")
+async def get_scan_alerts(
+    status: str | None = Query(None),
+    severity: str | None = Query(None),
+    component_type: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """扫描变化告警列表（状态降级/异常/恢复）"""
+    from sqlalchemy import select, func
+    from app.models.scanner import ScannerAlert
+    filters = []
+    if status:
+        filters.append(ScannerAlert.status == status)
+    if severity:
+        filters.append(ScannerAlert.severity == severity)
+    if component_type:
+        filters.append(ScannerAlert.component_type == component_type)
+    total = (await db.execute(select(func.count()).select_from(ScannerAlert).where(*filters))).scalar() or 0
+    rows = (await db.execute(
+        select(ScannerAlert).where(*filters)
+        .order_by(ScannerAlert.created_at.desc())
+        .offset((page - 1) * page_size).limit(page_size)
+    )).scalars().all()
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": [{
+            "id": a.id,
+            "component_type": a.component_type,
+            "component_id": a.component_id,
+            "component_name": a.component_name,
+            "previous_status": a.previous_status,
+            "current_status": a.current_status,
+            "severity": a.severity,
+            "message": a.message,
+            "status": a.status,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        } for a in rows],
+    }
+
+
+@router.patch("/scanner/alerts/{alert_id}")
+async def update_scan_alert(
+    alert_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """更新扫描告警状态（acknowledged/resolved）"""
+    from sqlalchemy import select
+    from app.models.scanner import ScannerAlert
+    alert = (await db.execute(select(ScannerAlert).where(ScannerAlert.id == alert_id))).scalars().first()
+    if not alert:
+        raise HTTPException(404, "告警不存在")
+    if body.get("status") in ("open", "acknowledged", "resolved"):
+        alert.status = body["status"]
+    await db.commit()
+    return {"id": alert_id, "status": alert.status}
+
+
 def _format_scan(scan) -> dict:
     import json
     summary = None

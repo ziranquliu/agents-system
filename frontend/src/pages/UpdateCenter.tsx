@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { getAvailableUpdates, refreshUpdates, applyUpdate, UpdateItem } from '../api/updates'
+import { getAvailableUpdates, refreshUpdates, applyUpdate, listUpdateSnapshots, rollbackUpdate, listUpdateLogs, UpdateItem, UpdateSnapshot, UpdateLogItem } from '../api/updates'
 import { useToast } from '../components/ui'
 
 const UpdateCenter: React.FC = () => {
@@ -8,6 +8,9 @@ const UpdateCenter: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(false)
   const [applying, setApplying] = useState<string | null>(null)
+  const [snapshots, setSnapshots] = useState<UpdateSnapshot[]>([])
+  const [logs, setLogs] = useState<UpdateLogItem[]>([])
+  const [rollingBack, setRollingBack] = useState<string | null>(null)
 
   const loadUpdates = async () => {
     setLoading(true)
@@ -21,7 +24,19 @@ const UpdateCenter: React.FC = () => {
     }
   }
 
-  useEffect(() => { loadUpdates() }, [])
+  useEffect(() => { loadUpdates(); loadSnapshots(); loadLogs() }, [])
+
+  const loadSnapshots = async () => {
+    try {
+      setSnapshots(await listUpdateSnapshots())
+    } catch { /* 忽略 */ }
+  }
+
+  const loadLogs = async () => {
+    try {
+      setLogs(await listUpdateLogs())
+    } catch { /* 忽略 */ }
+  }
 
   const handleRefresh = async () => {
     setChecking(true)
@@ -42,10 +57,27 @@ const UpdateCenter: React.FC = () => {
       const resp = await applyUpdate(item.component_type, item.component_id)
       toast.success(resp.message || '更新成功')
       loadUpdates()
+      loadSnapshots()
+      loadLogs()
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || '更新失败')
     } finally {
       setApplying(null)
+    }
+  }
+
+  const handleRollback = async (snapshot: UpdateSnapshot) => {
+    if (!window.confirm(`确定回滚「${snapshot.component_name || snapshot.component_id}」到版本 ${snapshot.old_version || '快照'}？`)) return
+    setRollingBack(snapshot.id)
+    try {
+      const resp = await rollbackUpdate(snapshot.id)
+      toast.success(resp.message || '回滚成功')
+      loadSnapshots()
+      loadLogs()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || '回滚失败')
+    } finally {
+      setRollingBack(null)
     }
   }
 
@@ -150,6 +182,80 @@ const UpdateCenter: React.FC = () => {
                     ) : '更新'}
                   </button>
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* 更新快照与回滚 */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mt-6">
+        <div className="px-5 py-3 border-b bg-gray-50 flex items-center justify-between">
+          <h3 className="font-semibold text-sm">📸 更新快照（回滚点）</h3>
+          <span className="text-xs text-gray-400">每次更新前自动保留，可一键回滚</span>
+        </div>
+        {snapshots.length === 0 ? (
+          <div className="text-center py-6 text-gray-400 text-sm">暂无快照 — 执行更新后自动生成</div>
+        ) : (
+          <div className="divide-y">
+            {snapshots.map(s => (
+              <div key={s.id} className="px-5 py-3 flex items-center justify-between text-sm hover:bg-gray-50">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                      typeColors[s.component_type] || 'text-gray-600 bg-gray-50'
+                    }`}>{typeLabels[s.component_type] || s.component_type}</span>
+                    <span className="font-medium">{s.component_name || s.component_id}</span>
+                    {s.rolled_back && <span className="text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded">已回滚</span>}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {s.old_version || '?'} → {s.new_version || '?'}
+                    <span className="ml-2">· {s.created_at ? new Date(s.created_at).toLocaleString() : ''}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleRollback(s)}
+                  disabled={s.rolled_back || rollingBack === s.id}
+                  className="px-3 py-1.5 border border-orange-300 text-orange-600 rounded-lg hover:bg-orange-50 disabled:opacity-40 text-xs flex-shrink-0"
+                >
+                  {rollingBack === s.id ? '回滚中...' : '↩ 回滚'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 更新日志 */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mt-6">
+        <div className="px-5 py-3 border-b bg-gray-50 flex items-center justify-between">
+          <h3 className="font-semibold text-sm">📋 更新操作日志</h3>
+          <span className="text-xs text-gray-400">更新时间 / 变更内容 / 兼容性 / 回滚状态</span>
+        </div>
+        {logs.length === 0 ? (
+          <div className="text-center py-6 text-gray-400 text-sm">暂无更新记录</div>
+        ) : (
+          <div className="divide-y">
+            {logs.map(l => (
+              <div key={l.id} className="px-5 py-3 text-sm flex items-center justify-between hover:bg-gray-50">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                      l.action === 'rollback' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
+                    }`}>{l.action === 'rollback' ? '回滚' : '更新'}</span>
+                    <span className="font-medium">{l.component_name}</span>
+                    <span className="text-xs text-gray-400">({l.component_type})</span>
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {l.old_version || '?'} → {l.new_version || '?'}
+                    <span className="ml-2">兼容性: <span className={
+                      l.compatibility === 'fail' ? 'text-red-600' : l.compatibility === 'warning' ? 'text-yellow-600' : 'text-green-600'
+                    }>{l.compatibility}</span></span>
+                    <span className="ml-2">状态: {
+                      l.status === 'success' ? '成功' : l.status === 'rolled_back' ? '已回滚' : '失败'
+                    }</span>
+                  </div>
+                </div>
+                <span className="text-xs text-gray-400">{l.created_at ? new Date(l.created_at).toLocaleString() : ''}</span>
               </div>
             ))}
           </div>
