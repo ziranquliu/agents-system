@@ -31,6 +31,7 @@ const navItems = [
   { path: '/system-monitor', label: '\u7CFB\u7EDF\u76D1\u63A7', icon: '\uD83D\uDCCA' },
   { path: '/monitoring', label: '\u76D1\u63A7\u770B\u677F', icon: '\uD83D\uDCCA' },
   { path: '/ops', label: '\u81EA\u52A8\u5316\u8FD0\u7EF4', icon: '\u2699\uFE0F' },
+  { path: '/backup-enhanced', label: '\u5907\u4EFD\u4E0E\u6062\u590D\u589E\u5F3A', icon: '\uD83D\uDCDA' },
 ]
 
 export default function Sidebar() {

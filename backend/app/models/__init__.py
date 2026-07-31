@@ -23,3 +23,8 @@ from app.models.ops import (
     AgentDeployment, ScalingPolicy, ScalingEvent, LogEntry, LogCollectionConfig,
     MaintenanceTask, MaintenanceExecution, SelfHealRecord, HealRule, OpsReport
 )
+from app.models.backup_enhanced import (
+    BackupRecord, BackupPolicy, BackupEventLog, RestoreOperation,
+    RestoreDrill, EncryptionKey, BackupType, BackupStatus, BackupScope,
+    RestoreType, RestoreStatus, DrillStatus, EncryptionAlgo,
+)

@@ -31,6 +31,7 @@ import MCPBatchPage from './pages/MCPBatchPage'
 import DialogueEnhancementPage from './pages/DialogueEnhancementPage'
 import MonitoringDashboardPage from './pages/MonitoringDashboardPage'
 import OpsPage from './pages/OpsPage'
+import BackupEnhancedPage from './pages/BackupEnhancedPage'
 import SystemMonitorPage from './pages/SystemMonitorPage'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
@@ -69,6 +70,7 @@ function App() {
         <Route path="dialogue-enhancement" element={<DialogueEnhancementPage />} />
         <Route path="monitoring" element={<MonitoringDashboardPage />} />
         <Route path="ops" element={<OpsPage />} />
+        <Route path="backup-enhanced" element={<BackupEnhancedPage />} />
         <Route path="knowledge" element={<KnowledgePage />} />
         <Route path="tasks" element={<TaskPage />} />
         <Route path="agent-memory" element={<AgentMemoryPage />} />
