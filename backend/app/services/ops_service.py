@@ -7,7 +7,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, date
 from typing import Any, Dict, List, Optional, Tuple
-from sqlmodel import select, func, and_, or_, desc, asc
+from sqlalchemy import select, func, and_, or_, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ops import (
@@ -221,7 +221,7 @@ class AutoScalingService:
                     return None  # 冷却中
             direction = ScalingDirection.SCALE_OUT
             new_instances = min(current_instances + policy.scale_out_step, policy.max_instances)
-            reason = f"{metric_type.value}={metric_value:.1f} >= threshold={policy.scale_out_threshold}"
+            reason = f"{metric_type}={metric_value:.1f} >= threshold={policy.scale_out_threshold}"
 
         elif metric_value <= policy.scale_in_threshold and current_instances > policy.min_instances:
             if last_event:
@@ -230,7 +230,7 @@ class AutoScalingService:
                     return None
             direction = ScalingDirection.SCALE_IN
             new_instances = max(current_instances - policy.scale_in_step, policy.min_instances)
-            reason = f"{metric_type.value}={metric_value:.1f} <= threshold={policy.scale_in_threshold}"
+            reason = f"{metric_type}={metric_value:.1f} <= threshold={policy.scale_in_threshold}"
 
         if direction is None or new_instances == current_instances:
             return None
@@ -312,7 +312,7 @@ class LogService:
             source_id=source_id,
             agent_id=agent_id,
             trace_id=trace_id,
-            metadata=json.dumps(metadata) if metadata else None,
+            log_metadata=json.dumps(metadata) if metadata else None,
         )
         session.add(entry)
         await session.flush()
@@ -362,13 +362,13 @@ class LogService:
         since = datetime.utcnow() - timedelta(days=days)
         total = select(func.count(LogEntry.id)).where(LogEntry.timestamp >= since)
         by_level = {}
-        for lvl in LogLevel:
-            by_level[lvl.value.lower()] = select(func.count(LogEntry.id)).where(
+        for lvl in ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"]:
+            by_level[lvl.lower()] = select(func.count(LogEntry.id)).where(
                 and_(LogEntry.timestamp >= since, LogEntry.level == lvl)
             )
         by_source = {}
-        for src in LogSourceType:
-            by_source[src.value] = select(func.count(LogEntry.id)).where(
+        for src in ["agent", "skill", "mcp", "system"]:
+            by_source[src] = select(func.count(LogEntry.id)).where(
                 and_(LogEntry.timestamp >= since, LogEntry.source_type == src)
             )
 
@@ -642,7 +642,7 @@ class SelfHealService:
             threshold_value=threshold_value,
             heal_level=heal_level,
             status=HealStatus.HEALING if auto_heal else HealStatus.DETECTED,
-            action_taken=f"Auto-{heal_level.value} triggered for {anomaly_type}" if auto_heal else "Pending manual intervention",
+            action_taken=f"Auto-{heal_level} triggered for {anomaly_type}" if auto_heal else "Pending manual intervention",
         )
         session.add(record)
         await session.flush()
@@ -705,8 +705,8 @@ class SelfHealService:
             and_(SelfHealRecord.detected_at >= since, SelfHealRecord.status == HealStatus.FAILED)
         )
         by_level = {}
-        for lvl in HealLevel:
-            by_level[lvl.value] = select(func.count(SelfHealRecord.id)).where(
+        for lvl in ["restart", "rollback", "degrade"]:
+            by_level[lvl] = select(func.count(SelfHealRecord.id)).where(
                 and_(SelfHealRecord.detected_at >= since, SelfHealRecord.heal_level == lvl)
             )
 
@@ -801,7 +801,7 @@ class ReportService:
 
         report = OpsReport(
             report_type=report_type,
-            title=f"{report_type.value.capitalize()} Operations Report - {period_start.date()} to {period_end.date()}",
+            title=f"{report_type.capitalize()} Operations Report - {period_start.date()} to {period_end.date()}",
             period_start=period_start,
             period_end=period_end,
             availability_rate=availability,

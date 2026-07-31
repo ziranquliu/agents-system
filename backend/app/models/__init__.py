@@ -28,3 +28,8 @@ from app.models.backup_enhanced import (
     RestoreDrill, EncryptionKey, BackupType, BackupStatus, BackupScope,
     RestoreType, RestoreStatus, DrillStatus, EncryptionAlgo,
 )
+from app.models.health import (
+    HealthCheckRun, HealthSnapshot, HealthScoreWeight, AgentHealthConfig,
+    HealthTrendPoint, HealthEvent, HealthLevel, CheckStatus,
+    AgentHealthStatus,
+)

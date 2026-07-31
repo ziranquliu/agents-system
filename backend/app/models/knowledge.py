@@ -56,7 +56,7 @@ class KnowledgeChunk(Base):
     document_id = Column(String(36), ForeignKey("knowledge_documents.id", ondelete="CASCADE"), nullable=False, index=True)
     knowledge_base_id = Column(String(36), ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=False, index=True)
     content = Column(Text, nullable=False)
-    metadata = Column(Text, nullable=True)  # JSON
+    chunk_metadata = Column(Text, nullable=True)  # JSON
     embedding_id = Column(String(100), nullable=True)  # Qdrant point ID
     chunk_index = Column(Integer, default=0)
     token_count = Column(Integer, default=0)

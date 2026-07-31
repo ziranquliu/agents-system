@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api import deps
+from app.db.session import get_db
 from app.models.backup_enhanced import (
     BackupRecord, BackupPolicy, BackupEventLog, RestoreOperation,
     RestoreDrill, EncryptionKey,
@@ -48,7 +48,7 @@ async def list_policies(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     enabled_only: bool = False,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await BackupEnhancedService.list_policies(session, skip, limit, enabled_only)
     return {"items": _serialize_list(items), "total": total, "skip": skip, "limit": limit}
@@ -57,7 +57,7 @@ async def list_policies(
 @router.post("/policies", summary="创建/更新备份策略")
 async def upsert_policy(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     policy = await BackupEnhancedService.upsert_policy(
         session,
@@ -74,7 +74,7 @@ async def upsert_policy(
         retention_days=body.get("retention_days", 90),
         drill_enabled=body.get("drill_enabled", True),
         drill_cron=body.get("drill_cron", "0 4 * * 0"),
-        default_scope=BackupScope(body.get("default_scope", "all")),
+        default_scope=body.get("default_scope", "all"),
     )
     return {"code": 0, "data": _serialize(policy), "message": "策略已保存"}
 
@@ -82,7 +82,7 @@ async def upsert_policy(
 @router.get("/policies/agent/{agent_id}", summary="按 Agent 查询策略")
 async def get_policy_by_agent(
     agent_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     policy = await BackupEnhancedService.get_policy(session, agent_id)
     if not policy:
@@ -93,7 +93,7 @@ async def get_policy_by_agent(
 @router.delete("/policies/{policy_id}", summary="删除备份策略")
 async def delete_policy(
     policy_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     ok = await BackupEnhancedService.delete_policy(session, policy_id)
     if not ok:
@@ -106,14 +106,14 @@ async def delete_policy(
 @router.post("/backups", summary="创建备份")
 async def create_backup(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     record = await BackupEnhancedService.create_backup(
         session,
         agent_id=body["agent_id"],
         agent_name=body.get("agent_name", body["agent_id"]),
-        backup_type=BackupType(body.get("backup_type", "full")),
-        scope=BackupScope(body.get("scope", "all")),
+        backup_type=body.get("backup_type", "full"),
+        scope=body.get("scope", "all"),
         created_by=body.get("created_by", "system"),
         encryption_enabled=body.get("encryption_enabled"),
     )
@@ -123,10 +123,10 @@ async def create_backup(
 @router.get("/backups", summary="备份记录列表")
 async def list_backups(
     agent_id: Optional[str] = None,
-    backup_type: Optional[BackupType] = None,
+    backup_type: Optional[str] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await BackupEnhancedService.list_backups(session, agent_id, backup_type, skip, limit)
     return {"items": _serialize_list(items), "total": total, "skip": skip, "limit": limit}
@@ -135,7 +135,7 @@ async def list_backups(
 @router.get("/backups/{backup_id}", summary="备份详情")
 async def get_backup(
     backup_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     record = await BackupEnhancedService.get_backup(session, backup_id)
     if not record:
@@ -146,7 +146,7 @@ async def get_backup(
 @router.delete("/backups/{backup_id}", summary="删除备份")
 async def delete_backup(
     backup_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     ok = await BackupEnhancedService.delete_backup(session, backup_id)
     if not ok:
@@ -157,7 +157,7 @@ async def delete_backup(
 @router.get("/stats", summary="备份统计")
 async def backup_stats(
     days: int = Query(30, ge=1, le=365),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     return {"code": 0, "data": await BackupEnhancedService.get_stats(session, days)}
 
@@ -167,7 +167,7 @@ async def backup_stats(
 @router.post("/events", summary="事件触发备份")
 async def trigger_event_backup(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     """外部系统调用：发生配置变更/Skill 绑定等事件时自动备份"""
     record = await BackupEnhancedService.log_event(
@@ -186,7 +186,7 @@ async def list_events(
     agent_id: Optional[str] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     conditions = []
     if agent_id:
@@ -209,13 +209,13 @@ async def list_events(
 @router.post("/restores", summary="创建恢复操作")
 async def create_restore(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     try:
         operation = await RestoreService.create_restore(
             session,
             backup_id=body["backup_id"],
-            restore_type=RestoreType(body.get("restore_type", "full")),
+            restore_type=body.get("restore_type", "full"),
             target_agent_id=body["target_agent_id"],
             target_agent_name=body.get("target_agent_name", body["target_agent_id"]),
             created_by=body.get("created_by", "system"),
@@ -230,7 +230,7 @@ async def list_restores(
     agent_id: Optional[str] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await RestoreService.list_restores(session, agent_id, skip, limit)
     return {"items": _serialize_list(items), "total": total, "skip": skip, "limit": limit}
@@ -239,7 +239,7 @@ async def list_restores(
 @router.get("/restores/{restore_id}", summary="恢复详情")
 async def get_restore(
     restore_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     operation = await RestoreService.get_restore(session, restore_id)
     if not operation:
@@ -252,7 +252,7 @@ async def get_restore(
 @router.post("/drills", summary="创建恢复演练")
 async def create_drill(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     drill = await DrillService.create_drill(
         session,
@@ -268,7 +268,7 @@ async def create_drill(
 async def complete_drill(
     drill_id: str,
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     drill = await DrillService.complete_drill(
         session,
@@ -287,7 +287,7 @@ async def list_drills(
     agent_id: Optional[str] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await DrillService.list_drills(session, agent_id, skip, limit)
     return {"items": _serialize_list(items), "total": total, "skip": skip, "limit": limit}
@@ -296,7 +296,7 @@ async def list_drills(
 @router.get("/drills/stats", summary="演练统计")
 async def drill_stats(
     days: int = Query(90, ge=1, le=365),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     return {"code": 0, "data": await DrillService.get_drill_stats(session, days)}
 
@@ -306,7 +306,7 @@ async def drill_stats(
 @router.post("/keys/rotate", summary="轮换加密密钥")
 async def rotate_key(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     key = await KeyManager.create_key(session, note=body.get("note"))
     return {"code": 0, "data": _serialize(key), "message": "密钥已轮换，旧密钥已停用"}
@@ -314,7 +314,7 @@ async def rotate_key(
 
 @router.get("/keys", summary="密钥列表")
 async def list_keys(
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await KeyManager.list_keys(session)
     return {"items": _serialize_list(items), "total": total}
@@ -322,7 +322,7 @@ async def list_keys(
 
 @router.get("/dashboard", summary="备份恢复概览")
 async def backup_dashboard(
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     stats = await BackupEnhancedService.get_stats(session, days=30)
     drill_stats = await DrillService.get_drill_stats(session, days=90)

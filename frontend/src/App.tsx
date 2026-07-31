@@ -32,6 +32,7 @@ import DialogueEnhancementPage from './pages/DialogueEnhancementPage'
 import MonitoringDashboardPage from './pages/MonitoringDashboardPage'
 import OpsPage from './pages/OpsPage'
 import BackupEnhancedPage from './pages/BackupEnhancedPage'
+import HealthPage from './pages/HealthPage'
 import SystemMonitorPage from './pages/SystemMonitorPage'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
@@ -71,6 +72,7 @@ function App() {
         <Route path="monitoring" element={<MonitoringDashboardPage />} />
         <Route path="ops" element={<OpsPage />} />
         <Route path="backup-enhanced" element={<BackupEnhancedPage />} />
+        <Route path="health" element={<HealthPage />} />
         <Route path="knowledge" element={<KnowledgePage />} />
         <Route path="tasks" element={<TaskPage />} />
         <Route path="agent-memory" element={<AgentMemoryPage />} />

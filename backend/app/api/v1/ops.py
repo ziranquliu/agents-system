@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import select, func, and_, desc
+from sqlalchemy import select, func, and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api import deps
+from app.db.session import get_db
 from app.models.ops import (
     AgentDeployment, AgentDeploymentStatus,
     ScalingPolicy, ScalingEvent, ScalingMetricType, ScalingDirection,
@@ -33,9 +33,9 @@ router = APIRouter(prefix="/api/v1/ops", tags=["智能体自动化运维"])
 async def list_deployments(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    status: Optional[AgentDeploymentStatus] = None,
+    status: Optional[str] = None,
     agent_name: Optional[str] = None,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await DeploymentService.list_deployments(session, skip, limit, status, agent_name)
     return {"items": items, "total": total, "skip": skip, "limit": limit}
@@ -44,7 +44,7 @@ async def list_deployments(
 @router.post("/deployments", summary="创建部署")
 async def create_deployment(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     dep = await DeploymentService.create_deployment(
         session=session,
@@ -60,7 +60,7 @@ async def create_deployment(
 @router.get("/deployments/{dep_id}", summary="部署详情")
 async def get_deployment(
     dep_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     dep = await DeploymentService.get_deployment(session, dep_id)
     if not dep:
@@ -72,12 +72,12 @@ async def get_deployment(
 async def update_deployment_status(
     dep_id: str,
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     dep = await DeploymentService.update_status(
         session,
         dep_id,
-        status=AgentDeploymentStatus(body.get("status")),
+        status=body.get("status"),
         error_message=body.get("error_message"),
         health_score=body.get("health_score"),
     )
@@ -89,7 +89,7 @@ async def update_deployment_status(
 @router.post("/deployments/{dep_id}/rollback", summary="回滚部署")
 async def rollback_deployment(
     dep_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     dep = await DeploymentService.rollback_deployment(session, dep_id)
     if not dep:
@@ -100,7 +100,7 @@ async def rollback_deployment(
 @router.delete("/deployments/{dep_id}", summary="删除部署记录")
 async def delete_deployment(
     dep_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     ok = await DeploymentService.delete_deployment(session, dep_id)
     if not ok:
@@ -110,7 +110,7 @@ async def delete_deployment(
 
 @router.get("/deployments/stats", summary="部署统计")
 async def deployment_stats(
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     return await DeploymentService.get_stats(session)
 
@@ -122,7 +122,7 @@ async def list_scaling_policies(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     enabled_only: bool = False,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await AutoScalingService.list_policies(session, skip, limit, enabled_only)
     return {"items": items, "total": total, "skip": skip, "limit": limit}
@@ -131,13 +131,13 @@ async def list_scaling_policies(
 @router.post("/scaling/policies", summary="创建/更新扩缩容策略")
 async def upsert_scaling_policy(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     policy = await AutoScalingService.upsert_policy(
         session,
         agent_id=body["agent_id"],
         agent_name=body["agent_name"],
-        metric_type=ScalingMetricType(body.get("metric_type", "cpu_usage")),
+        metric_type=body.get("metric_type", "cpu_usage"),
         scale_out_threshold=body.get("scale_out_threshold", 70.0),
         scale_in_threshold=body.get("scale_in_threshold", 30.0),
         min_instances=body.get("min_instances", 1),
@@ -154,7 +154,7 @@ async def upsert_scaling_policy(
 @router.get("/scaling/policies/{policy_id}", summary="扩缩容策略详情")
 async def get_scaling_policy(
     policy_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     policy = await AutoScalingService.get_policy(session, policy_id)
     if not policy:
@@ -165,18 +165,18 @@ async def get_scaling_policy(
 @router.post("/scaling/evaluate", summary="评估扩缩容")
 async def evaluate_scaling(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     event = await AutoScalingService.evaluate_scaling(
         session,
         agent_id=body["agent_id"],
         current_instances=body["current_instances"],
-        metric_type=ScalingMetricType(body["metric_type"]),
+        metric_type=body["metric_type"],
         metric_value=body["metric_value"],
     )
     if not event:
         return {"code": 0, "data": None, "message": "无需扩缩容或冷却中"}
-    return {"code": 0, "data": event, "message": f"触发{event.direction.value}"}
+    return {"code": 0, "data": event, "message": f"触发{event.direction}"}
 
 
 @router.get("/scaling/events", summary="扩缩容事件记录")
@@ -185,7 +185,7 @@ async def list_scaling_events(
     days: int = Query(7, ge=1, le=90),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await AutoScalingService.list_events(session, agent_id, skip, limit, days)
     return {"items": items, "total": total, "skip": skip, "limit": limit}
@@ -194,7 +194,7 @@ async def list_scaling_events(
 @router.get("/scaling/stats", summary="扩缩容统计")
 async def scaling_stats(
     days: int = Query(30, ge=1, le=365),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     return {"code": 0, "data": await AutoScalingService.get_scaling_stats(session, days)}
 
@@ -204,14 +204,14 @@ async def scaling_stats(
 @router.post("/logs/ingest", summary="写入日志")
 async def ingest_log(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     entry = await LogService.ingest_log(
         session,
-        level=LogLevel(body.get("level", "INFO")),
+        level=body.get("level", "INFO"),
         logger_name=body.get("logger", "system"),
         message=body.get("message", ""),
-        source_type=LogSourceType(body.get("source_type", "system")),
+        source_type=body.get("source_type", "system"),
         source_id=body.get("source_id"),
         agent_id=body.get("agent_id"),
         trace_id=body.get("trace_id"),
@@ -222,16 +222,16 @@ async def ingest_log(
 
 @router.get("/logs", summary="搜索日志")
 async def search_logs(
-    level: Optional[LogLevel] = None,
+    level: Optional[str] = None,
     logger: Optional[str] = None,
-    source_type: Optional[LogSourceType] = None,
+    source_type: Optional[str] = None,
     agent_id: Optional[str] = None,
     keyword: Optional[str] = None,
     from_time: Optional[datetime] = None,
     to_time: Optional[datetime] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await LogService.search_logs(
         session, level, logger, source_type, agent_id,
@@ -243,7 +243,7 @@ async def search_logs(
 @router.get("/logs/stats", summary="日志统计")
 async def log_stats(
     days: int = Query(7, ge=1, le=90),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     return await LogService.get_log_stats(session, days)
 
@@ -252,7 +252,7 @@ async def log_stats(
 async def list_log_configs(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await LogService.list_collection_configs(session, skip, limit)
     return {"items": items, "total": total, "skip": skip, "limit": limit}
@@ -261,12 +261,12 @@ async def list_log_configs(
 @router.post("/logs/configs", summary="创建/更新日志采集配置")
 async def upsert_log_config(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     config = await LogService.upsert_collection_config(
         session,
         agent_id=body["agent_id"],
-        log_level=LogLevel(body.get("log_level", "INFO")),
+        log_level=body.get("log_level", "INFO"),
         enabled=body.get("enabled", True),
         sources=json.dumps(body.get("sources", ["agent", "skill", "mcp", "system"])),
         rotation_size_mb=body.get("rotation_size_mb", 500),
@@ -280,11 +280,11 @@ async def upsert_log_config(
 
 @router.get("/maintenance/tasks", summary="维护任务列表")
 async def list_maintenance_tasks(
-    task_type: Optional[MaintenanceType] = None,
+    task_type: Optional[str] = None,
     enabled_only: bool = False,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await MaintenanceService.list_tasks(session, skip, limit, task_type, enabled_only)
     return {"items": items, "total": total, "skip": skip, "limit": limit}
@@ -293,11 +293,11 @@ async def list_maintenance_tasks(
 @router.post("/maintenance/tasks", summary="创建维护任务")
 async def create_maintenance_task(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     task = await MaintenanceService.create_task(
         session,
-        task_type=MaintenanceType(body["task_type"]),
+        task_type=body["task_type"],
         name=body["name"],
         cron_expression=body["cron_expression"],
         description=body.get("description"),
@@ -311,7 +311,7 @@ async def create_maintenance_task(
 @router.get("/maintenance/tasks/{task_id}", summary="维护任务详情")
 async def get_maintenance_task(
     task_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     task = await MaintenanceService.get_task(session, task_id)
     if not task:
@@ -323,7 +323,7 @@ async def get_maintenance_task(
 async def update_maintenance_task(
     task_id: str,
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     task = await MaintenanceService.update_task(session, task_id, **body)
     if not task:
@@ -334,7 +334,7 @@ async def update_maintenance_task(
 @router.delete("/maintenance/tasks/{task_id}", summary="删除维护任务")
 async def delete_maintenance_task(
     task_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     ok = await MaintenanceService.delete_task(session, task_id)
     if not ok:
@@ -346,7 +346,7 @@ async def delete_maintenance_task(
 async def execute_maintenance_task(
     task_id: str,
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     exec_record = await MaintenanceService.execute_task(
         session,
@@ -367,7 +367,7 @@ async def list_maintenance_executions(
     days: int = Query(7, ge=1, le=90),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await MaintenanceService.list_executions(session, task_id, skip, limit, days)
     return {"items": items, "total": total, "skip": skip, "limit": limit}
@@ -381,7 +381,7 @@ async def list_heal_rules(
     enabled_only: bool = False,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await SelfHealService.list_rules(session, agent_id, enabled_only, skip, limit)
     return {"items": items, "total": total, "skip": skip, "limit": limit}
@@ -390,13 +390,13 @@ async def list_heal_rules(
 @router.post("/heal/rules", summary="创建自愈规则")
 async def create_heal_rule(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     rule = await SelfHealService.create_rule(
         session,
         agent_id=body["agent_id"],
         anomaly_type=body["anomaly_type"],
-        heal_level=HealLevel(body.get("heal_level", "restart")),
+        heal_level=body.get("heal_level", "restart"),
         consecutive_threshold=body.get("consecutive_threshold", 3),
         error_rate_threshold=body.get("error_rate_threshold"),
         p99_latency_threshold_ms=body.get("p99_latency_threshold_ms"),
@@ -410,7 +410,7 @@ async def create_heal_rule(
 @router.get("/heal/rules/{rule_id}", summary="自愈规则详情")
 async def get_heal_rule(
     rule_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     rule = await SelfHealService.get_rule(session, rule_id)
     if not rule:
@@ -422,7 +422,7 @@ async def get_heal_rule(
 async def update_heal_rule(
     rule_id: str,
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     rule = await SelfHealService.update_rule(session, rule_id, **body)
     if not rule:
@@ -433,7 +433,7 @@ async def update_heal_rule(
 @router.delete("/heal/rules/{rule_id}", summary="删除自愈规则")
 async def delete_heal_rule(
     rule_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     ok = await SelfHealService.delete_rule(session, rule_id)
     if not ok:
@@ -444,7 +444,7 @@ async def delete_heal_rule(
 @router.post("/heal/trigger", summary="触发自愈")
 async def trigger_heal(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     record = await SelfHealService.trigger_heal(
         session,
@@ -453,7 +453,7 @@ async def trigger_heal(
         anomaly_type=body["anomaly_type"],
         anomaly_value=body["anomaly_value"],
         threshold_value=body["threshold_value"],
-        heal_level=HealLevel(body.get("heal_level", "restart")),
+        heal_level=body.get("heal_level", "restart"),
         auto_heal=body.get("auto_heal", True),
     )
     return {"code": 0, "data": record, "message": "自愈事件已记录"}
@@ -463,12 +463,12 @@ async def trigger_heal(
 async def complete_heal(
     record_id: str,
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     record = await SelfHealService.complete_heal(
         session,
         record_id,
-        status=HealStatus(body.get("status", "success")),
+        status=body.get("status", "success"),
         health_score_after=body.get("health_score_after"),
         verified=body.get("verified", False),
         error_message=body.get("error_message"),
@@ -481,11 +481,11 @@ async def complete_heal(
 @router.get("/heal/records", summary="自愈记录列表")
 async def list_heal_records(
     agent_id: Optional[str] = None,
-    status: Optional[HealStatus] = None,
+    status: Optional[str] = None,
     days: int = Query(30, ge=1, le=365),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await SelfHealService.list_heal_records(session, agent_id, status, skip, limit, days)
     return {"items": items, "total": total, "skip": skip, "limit": limit}
@@ -494,7 +494,7 @@ async def list_heal_records(
 @router.get("/heal/stats", summary="自愈统计")
 async def heal_stats(
     days: int = Query(30, ge=1, le=365),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     return await SelfHealService.get_heal_stats(session, days)
 
@@ -504,10 +504,10 @@ async def heal_stats(
 @router.post("/reports/generate", summary="生成运维报告")
 async def generate_report(
     body: dict,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     period_end = datetime.utcnow()
-    report_type = ReportType(body.get("report_type", "daily"))
+    report_type = body.get("report_type", "daily")
     if report_type == ReportType.DAILY:
         period_start = period_end - timedelta(days=1)
     elif report_type == ReportType.WEEKLY:
@@ -521,10 +521,10 @@ async def generate_report(
 
 @router.get("/reports", summary="运维报告列表")
 async def list_reports(
-    report_type: Optional[ReportType] = None,
+    report_type: Optional[str] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     items, total = await ReportService.list_reports(session, report_type, skip, limit)
     return {"items": items, "total": total, "skip": skip, "limit": limit}
@@ -533,7 +533,7 @@ async def list_reports(
 @router.get("/reports/{report_id}", summary="运维报告详情")
 async def get_report(
     report_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     report = await ReportService.get_report(session, report_id)
     if not report:
@@ -544,7 +544,7 @@ async def get_report(
 @router.delete("/reports/{report_id}", summary="删除运维报告")
 async def delete_report(
     report_id: str,
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     ok = await ReportService.delete_report(session, report_id)
     if not ok:
@@ -556,7 +556,7 @@ async def delete_report(
 
 @router.get("/dashboard", summary="运维概览")
 async def ops_dashboard(
-    session: AsyncSession = Depends(deps.get_session),
+    session: AsyncSession = Depends(get_db),
 ):
     """综合运维概览数据"""
     deploy_stats = await DeploymentService.get_stats(session)
