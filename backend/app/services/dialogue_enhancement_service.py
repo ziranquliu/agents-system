@@ -4,6 +4,7 @@
 import csv
 import io
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -349,3 +350,189 @@ class DialogueEnhancementService:
             .offset(offset).limit(limit)
         )
         return list(r.scalars().all()), total
+
+    # ----------------------------------------------------------
+    # 4.15.7 批量导出（多选会话）
+    # ----------------------------------------------------------
+
+    _SENSITIVE_PATTERNS = [
+        (re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"), "***@***"),
+        (re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)"), "1**********"),
+        (re.compile(r"(?<!\d)\d{17}[\dXx](?!\d)"), "******************"),
+        (re.compile(r"(?<!\d)\d{15}(?!\d)"), "***************"),
+    ]
+
+    @staticmethod
+    def _mask_text(text: str) -> str:
+        """脱敏：邮箱 / 手机号 / 身份证 / 银行卡号"""
+        if not text:
+            return text
+        for pattern, repl in DialogueEnhancementService._SENSITIVE_PATTERNS:
+            text = pattern.sub(repl, text)
+        return text
+
+    async def batch_export_conversations(
+        self,
+        conversation_ids: list[str],
+        export_format: str = "csv",
+        include_metadata: bool = False,
+        mask_sensitive: bool = False,
+    ) -> tuple[str, str]:
+        """批量导出多个对话，返回 (内容, 建议文件名)。
+        支持格式: csv / json / html
+        """
+        export_format = (export_format or "csv").lower()
+        if export_format not in ("csv", "json", "html"):
+            raise ValueError("不支持的导出格式，仅支持 csv / json / html")
+
+        results: list[tuple[Conversation, list[Message]]] = []
+        for cid in conversation_ids:
+            r = await self.db.execute(
+                select(Conversation).where(Conversation.id == cid)
+            )
+            conv = r.scalar_one_or_none()
+            if not conv:
+                continue
+            r2 = await self.db.execute(
+                select(Message).where(Message.conversation_id == cid)
+                .order_by(Message.created_at)
+            )
+            results.append((conv, list(r2.scalars().all())))
+
+        if not results:
+            raise ValueError("未找到可导出的对话，请检查所选会话是否存在")
+
+        ts = datetime.now().strftime("%Y%m%d%H%M%S")
+        if export_format == "json":
+            content = self._batch_to_json(results, include_metadata, mask_sensitive)
+            return content, f"conversations_batch_{ts}.json"
+        if export_format == "html":
+            content = self._batch_to_html(results, include_metadata, mask_sensitive)
+            return content, f"conversations_batch_{ts}.html"
+        content = self._batch_to_csv(results, include_metadata, mask_sensitive)
+        return content, f"conversations_batch_{ts}.csv"
+
+    def _batch_to_csv(
+        self,
+        results: list[tuple[Conversation, list[Message]]],
+        include_metadata: bool,
+        mask_sensitive: bool,
+    ) -> str:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        if include_metadata:
+            writer.writerow(["对话ID", "对话标题", "Agent", "用户", "序号", "角色", "内容", "Token数", "模型", "时间"])
+        else:
+            writer.writerow(["对话ID", "序号", "角色", "内容", "Token数", "模型", "时间"])
+
+        for conv, messages in results:
+            for i, m in enumerate(messages, 1):
+                content = m.content or ""
+                if mask_sensitive:
+                    content = self._mask_text(content)
+                row = [conv.id]
+                if include_metadata:
+                    row += [conv.title or "", conv.agent_id, conv.user_id]
+                row += [
+                    i,
+                    m.role,
+                    content[:500],
+                    m.total_tokens or 0,
+                    m.model_used or "",
+                    m.created_at.isoformat() if m.created_at else "",
+                ]
+                writer.writerow(row)
+        return output.getvalue()
+
+    def _batch_to_json(
+        self,
+        results: list[tuple[Conversation, list[Message]]],
+        include_metadata: bool,
+        mask_sensitive: bool,
+    ) -> str:
+        payload = []
+        for conv, messages in results:
+            item: dict[str, Any] = {
+                "conversation_id": conv.id,
+                "title": conv.title or "",
+            }
+            if include_metadata:
+                item["agent_id"] = conv.agent_id
+                item["user_id"] = conv.user_id
+                item["workspace_id"] = getattr(conv, "workspace_id", None)
+                item["status"] = getattr(conv, "status", None)
+                item["message_count"] = len(messages)
+                item["token_count"] = getattr(conv, "token_count", None)
+                item["created_at"] = conv.created_at.isoformat() if conv.created_at else None
+                item["updated_at"] = conv.updated_at.isoformat() if conv.updated_at else None
+
+            messages_out = []
+            for m in messages:
+                content = m.content or ""
+                if mask_sensitive:
+                    content = self._mask_text(content)
+                msg: dict[str, Any] = {
+                    "role": m.role,
+                    "content": content,
+                    "content_type": getattr(m, "content_type", None),
+                    "total_tokens": m.total_tokens or 0,
+                    "model_used": m.model_used or "",
+                    "created_at": m.created_at.isoformat() if m.created_at else None,
+                }
+                if include_metadata:
+                    msg["message_id"] = m.id
+                    msg["prompt_tokens"] = getattr(m, "prompt_tokens", None) or 0
+                    msg["completion_tokens"] = getattr(m, "completion_tokens", None) or 0
+                messages_out.append(msg)
+            item["messages"] = messages_out
+            payload.append(item)
+        return json.dumps(payload, ensure_ascii=False, indent=2)
+
+    def _batch_to_html(
+        self,
+        results: list[tuple[Conversation, list[Message]]],
+        include_metadata: bool,
+        mask_sensitive: bool,
+    ) -> str:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        parts = [f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>批量对话导出</title>
+<style>
+  body {{ font-family: 'Segoe UI', sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }}
+  h1 {{ font-size: 1.5em; color: #333; }}
+  h2 {{ font-size: 1.2em; color: #444; margin-top: 28px; border-bottom: 1px solid #eee; padding-bottom: 6px; }}
+  .meta {{ color: #666; font-size: 0.9em; margin-bottom: 20px; }}
+  .msg {{ margin: 12px 0; padding: 12px; border-radius: 8px; }}
+  .msg.user {{ background: #e3f2fd; }}
+  .msg.assistant {{ background: #f3e5f5; }}
+  .msg.system {{ background: #fff3e0; }}
+  .msg.tool {{ background: #e8f5e9; }}
+  .role {{ font-weight: bold; font-size: 0.85em; margin-bottom: 4px; }}
+  .content {{ white-space: pre-wrap; font-size: 0.95em; }}
+  .time {{ color: #999; font-size: 0.75em; margin-top: 4px; }}
+  @media print {{ body {{ margin: 0; }} }}
+</style></head><body>
+<h1>📦 批量对话导出</h1>
+<div class="meta">共 {len(results)} 个对话 | 导出时间: {now}{' | 已脱敏' if mask_sensitive else ''}</div>"""]
+
+        for idx, (conv, messages) in enumerate(results, 1):
+            parts.append(f'<h2>{idx}. {conv.title or "无标题对话"}</h2>')
+            if include_metadata:
+                parts.append(
+                    f'<div class="meta">对话ID: {conv.id} | Agent: {conv.agent_id} | '
+                    f'用户: {conv.user_id} | 消息数: {len(messages)} | '
+                    f'创建: {conv.created_at}</div>'
+                )
+            for m in messages:
+                role_label = {"user": "👤 用户", "assistant": "🤖 AI", "system": "⚙️ 系统", "tool": "🔧 工具"}.get(m.role, m.role)
+                content = m.content or ""
+                if mask_sensitive:
+                    content = self._mask_text(content)
+                parts.append(f"""<div class="msg {m.role}">
+  <div class="role">{role_label}</div>
+  <div class="content">{content}</div>
+  <div class="time">{'Token: ' + str(m.total_tokens) if m.total_tokens else ''} | {m.created_at}</div>
+</div>""")
+
+        parts.append("</body></html>")
+        return "\n".join(parts)

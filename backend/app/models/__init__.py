@@ -41,3 +41,4 @@ from app.models.token import (
     TokenUsage, TokenBudget, TokenAlert, ModelCascadeRule, TokenOptimizationStat,
 )
 from app.models.update_enhanced import UpdateSnapshot, UpdateLog
+from app.models.notification import NotificationConfig, NotifyMethod

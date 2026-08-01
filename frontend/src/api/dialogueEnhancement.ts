@@ -86,3 +86,37 @@ export async function listExportableConversations(params: Record<string, string 
   const resp = await apiFetch(`/api/v1/dialogue/export/conversations?${qs}`, { method: 'GET' })
   return resp.data
 }
+
+// 批量导出多个对话（多选会话导出）
+export interface BatchExportParams {
+  conversation_ids: string[]
+  format: 'csv' | 'json' | 'html'
+  include_metadata: boolean
+  mask_sensitive: boolean
+}
+
+/**
+ * 批量导出对话 — POST /api/v1/dialogue/export/batch
+ * 返回文件 blob 并触发浏览器下载，文件名取后端 Content-Disposition 中的 filename
+ */
+export async function batchExportConversations(params: BatchExportParams): Promise<Blob> {
+  const resp = await apiFetch('/api/v1/dialogue/export/batch', {
+    method: 'POST',
+    data: params,
+    responseType: 'blob',
+  })
+  const blob: Blob = resp.data
+  // 从 Content-Disposition 解析文件名（兼容 filename=xxx / filename="xxx" 两种格式）
+  const disposition: string = resp.headers?.['content-disposition'] || ''
+  const match = /filename="?([^";]+)"?/i.exec(disposition)
+  const filename = (match?.[1]?.trim()) || `conversations-batch.${params.format}`
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+  return blob
+}

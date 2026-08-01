@@ -3,6 +3,7 @@ import {
   createIntervention, listInterventions, approveIntervention, rejectIntervention,
   createRating, listRatings, getRatingStats, recordRatingSnapshot,
   getConversationCsvUrl, getConversationPdfUrl, listExportableConversations,
+  batchExportConversations, BatchExportParams,
   HumanIntervention, DialogueRating,
 } from '../api/dialogueEnhancement'
 import { useToast } from '../components/ui'
@@ -36,6 +37,27 @@ const DialogueEnhancementPage: React.FC = () => {
   const [conversations, setConversations] = useState<any[]>([])
   const [loadingConv, setLoadingConv] = useState(false)
 
+  // 批量导出
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [batchFormat, setBatchFormat] = useState<'csv' | 'json' | 'html'>('csv')
+  const [batchIncludeMeta, setBatchIncludeMeta] = useState(true)
+  const [batchMask, setBatchMask] = useState(true)
+  const [exportingBatch, setExportingBatch] = useState(false)
+
+  // 批量选择
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+  const toggleSelectAll = () => {
+    if (selectedIds.length === conversations.length) setSelectedIds([])
+    else setSelectedIds(conversations.map(c => c.id))
+  }
+  // 切换标签时清空选择
+  const switchTab = (key: string) => {
+    setSelectedIds([])
+    setTab(key as any)
+  }
+
   const loadInterventions = useCallback(async () => {
     setLoadingInv(true)
     try { const r = await listInterventions({ offset: 0, limit: 50 }); setInterventions(r.data || []); setTotalInv(r.total) }
@@ -66,7 +88,26 @@ const DialogueEnhancementPage: React.FC = () => {
   useEffect(() => { if (tab === 'interventions') loadInterventions() }, [tab])
   useEffect(() => { if (tab === 'ratings') loadRatings() }, [tab])
   useEffect(() => { if (tab === 'stats') loadStats() }, [tab])
-  useEffect(() => { if (tab === 'export') loadConversations() }, [tab])
+  useEffect(() => { if (tab === 'export') { loadConversations(); setSelectedIds([]) } }, [tab])
+
+  const handleBatchExport = async () => {
+    if (selectedIds.length === 0) { toast.error('请先勾选要导出的对话'); return }
+    setExportingBatch(true)
+    try {
+      const params: BatchExportParams = {
+        conversation_ids: selectedIds,
+        format: batchFormat,
+        include_metadata: batchIncludeMeta,
+        mask_sensitive: batchMask,
+      }
+      await batchExportConversations(params)
+      toast.success(`已导出 ${selectedIds.length} 个对话`)
+    } catch {
+      toast.error('批量导出失败')
+    } finally {
+      setExportingBatch(false)
+    }
+  }
 
   const handleCreateInv = async () => {
     if (!invForm.conversation_id || !invForm.agent_id) { toast.error('请填写必要信息'); return }
@@ -127,7 +168,7 @@ const DialogueEnhancementPage: React.FC = () => {
           { key: 'stats', label: '📊 满意度分析' },
           { key: 'export', label: '📤 导出管理' },
         ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key as any)}
+          <button key={t.key} onClick={() => switchTab(t.key)}
             className={`px-4 py-2 text-sm border-b-2 ${tab === t.key ? 'border-blue-500 text-blue-600 font-medium' : 'border-transparent text-gray-500'}`}>
             {t.label}
           </button>
@@ -292,22 +333,66 @@ const DialogueEnhancementPage: React.FC = () => {
       {/* Export */}
       {tab === 'export' && (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b bg-gray-50 text-sm font-semibold">导出对话</div>
+          <div className="px-5 py-3 border-b bg-gray-50 flex items-center justify-between">
+            <span className="text-sm font-semibold">导出对话</span>
+            <span className="text-xs text-gray-500">已选 {selectedIds.length} 个</span>
+          </div>
+
+          {/* 批量导出区域 */}
+          {conversations.length > 0 && (
+            <div className="px-5 py-4 border-b bg-blue-50/40">
+              <div className="flex flex-wrap items-center gap-3">
+                <button onClick={handleBatchExport} disabled={exportingBatch || selectedIds.length === 0}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium ${exportingBatch || selectedIds.length === 0
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+                  {exportingBatch ? '导出中…' : `📦 批量下载 (${selectedIds.length})`}
+                </button>
+                <select value={batchFormat} onChange={e => setBatchFormat(e.target.value as any)}
+                  className="px-3 py-2 border rounded-lg text-sm bg-white">
+                  <option value="csv">CSV（统计摘要）</option>
+                  <option value="json">JSON（结构化）</option>
+                  <option value="html">HTML（报告）</option>
+                </select>
+                <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
+                  <input type="checkbox" checked={batchIncludeMeta} onChange={e => setBatchIncludeMeta(e.target.checked)}
+                    className="w-4 h-4 accent-blue-600" /> 含元数据
+                </label>
+                <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
+                  <input type="checkbox" checked={batchMask} onChange={e => setBatchMask(e.target.checked)}
+                    className="w-4 h-4 accent-blue-600" /> 隐私脱敏
+                </label>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">勾选下方对话后批量导出；单次最多 50 个，支持跨 Agent 多选。</p>
+            </div>
+          )}
+
           {loadingConv ? (
             <div className="flex justify-center py-12"><div className="animate-spin w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full" /></div>
           ) : conversations.length === 0 ? (
             <div className="text-center py-12 text-gray-400 text-sm">暂无可导出的对话</div>
           ) : (
             <div className="divide-y">
+              <div className="px-5 py-2 bg-gray-50 flex items-center gap-3 text-xs text-gray-500">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={selectedIds.length > 0 && selectedIds.length === conversations.length}
+                    onChange={toggleSelectAll} className="w-4 h-4 accent-blue-600" />
+                  全选
+                </label>
+              </div>
               {conversations.map(c => (
-                <div key={c.id} className="px-5 py-4 flex items-center justify-between text-sm">
-                  <div>
-                    <div className="font-medium">{c.title || '无标题对话'}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      {c.message_count} 条消息 · Agent: {c.agent_id?.slice(0, 12)}... · {c.created_at ? new Date(c.created_at).toLocaleDateString() : ''}
+                <div key={c.id} className={`px-5 py-4 flex items-center justify-between text-sm ${selectedIds.includes(c.id) ? 'bg-blue-50/60' : ''}`}>
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <input type="checkbox" checked={selectedIds.includes(c.id)} onChange={() => toggleSelect(c.id)}
+                      className="w-4 h-4 accent-blue-600 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{c.title || '无标题对话'}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {c.message_count} 条消息 · Agent: {c.agent_id?.slice(0, 12)}... · {c.created_at ? new Date(c.created_at).toLocaleDateString() : ''}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 shrink-0">
                     <a href={getConversationCsvUrl(c.id)} target="_blank" rel="noopener noreferrer"
                       className="px-3 py-1 text-xs border rounded hover:bg-gray-50">📥 CSV</a>
                     <a href={getConversationPdfUrl(c.id)} target="_blank" rel="noopener noreferrer"

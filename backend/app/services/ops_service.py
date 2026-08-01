@@ -646,6 +646,45 @@ class SelfHealService:
         )
         session.add(record)
         await session.flush()
+
+        # ---- 自愈通知通道：Webhook / 邮件 ----
+        try:
+            from app.services.notification_service import (
+                get_notification_config, notify,
+            )
+            from app.models.notification import NotifyMethod
+            from app.models.agent import Agent
+
+            cfg = await get_notification_config(session)
+            agent_webhook = None
+            if cfg.notify_method and cfg.notify_method != NotifyMethod.OFF:
+                # 读取 Agent 级 webhook_url（优先于全局）
+                agent_stmt = select(Agent.webhook_url).where(Agent.id == agent_id)
+                agent_webhook = (await session.execute(agent_stmt)).scalar_one_or_none()
+
+                action_desc = f"自动执行自愈 {heal_level}：{anomaly_type}" if auto_heal \
+                    else f"检测到异常（{anomaly_type}），等待人工处理"
+                title = f"【自愈通知】Agent {agent_name} {anomaly_type}"
+                content = (
+                    f"Agent: {agent_name} ({agent_id})\n"
+                    f"异常类型: {anomaly_type}\n"
+                    f"异常值: {anomaly_value} / 阈值: {threshold_value}\n"
+                    f"自愈等级: {heal_level}\n"
+                    f"处理动作: {action_desc}\n"
+                    f"触发时间: {datetime.utcnow().isoformat()}\n"
+                )
+                recipients = cfg.default_recipients or None
+                await notify(
+                    method=cfg.notify_method,
+                    target=recipients,
+                    title=title,
+                    content=content,
+                    webhook_url=agent_webhook,
+                    cfg=cfg,
+                )
+        except Exception as exc:  # noqa: BLE001 - 通知失败不影响自愈主流程
+            logger.warning("trigger_heal: 发送自愈通知失败: %s", exc)
+
         return record
 
     @staticmethod

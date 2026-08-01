@@ -209,3 +209,82 @@ async def prometheus_metrics(db: AsyncSession = Depends(get_db)):
     svc = MonitoringService(db)
     content = await svc.metrics_for_prometheus()
     return PlainTextResponse(content=content, media_type="text/plain")
+
+# ----------------------------------------------------------
+# 自愈通知通道
+# ----------------------------------------------------------
+
+def _notify_config_to_dict(c):
+    return {
+        "id": c.id,
+        "notify_method": c.notify_method,
+        "webhook_url": c.webhook_url,
+        "smtp_host": c.smtp_host,
+        "smtp_port": c.smtp_port,
+        "smtp_user": c.smtp_user,
+        "smtp_use_ssl": c.smtp_use_ssl,
+        "smtp_from": c.smtp_from,
+        "default_recipients": c.default_recipients,
+        # 密码不回显
+        "smtp_password_set": bool(c.smtp_password),
+        "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+    }
+
+@router.get("/notify/config", summary="查看自愈通知配置")
+async def get_notify_config(db: AsyncSession = Depends(get_db)):
+    from app.services.notification_service import get_notification_config
+    cfg = await get_notification_config(db)
+    return {"success": True, "data": _notify_config_to_dict(cfg)}
+
+@router.put("/notify/config", summary="更新自愈通知配置")
+async def update_notify_config(data: dict, db: AsyncSession = Depends(get_db)):
+    from app.services.notification_service import get_notification_config
+    from app.models.notification import NotifyMethod
+
+    cfg = await get_notification_config(db)
+
+    method = data.get("notify_method")
+    if method is not None:
+        if method not in (NotifyMethod.WEBHOOK, NotifyMethod.EMAIL,
+                          NotifyMethod.BOTH, NotifyMethod.OFF):
+            raise HTTPException(400, f"notify_method 取值非法: {method}")
+        cfg.notify_method = method
+    for field in ("webhook_url", "smtp_host", "smtp_user", "smtp_from",
+                  "default_recipients"):
+        if field in data:
+            setattr(cfg, field, data[field] or None)
+    if "smtp_port" in data:
+        cfg.smtp_port = int(data["smtp_port"])
+    if "smtp_use_ssl" in data:
+        cfg.smtp_use_ssl = bool(data["smtp_use_ssl"])
+    if "smtp_password" in data and data.get("smtp_password"):
+        cfg.smtp_password = data["smtp_password"]
+
+    await db.commit()
+    await db.refresh(cfg)
+    return {"success": True, "data": _notify_config_to_dict(cfg)}
+
+@router.post("/notify/test", summary="发送测试通知")
+async def send_test_notify(data: dict, db: AsyncSession = Depends(get_db)):
+    from app.services.notification_service import get_notification_config, notify
+    from app.models.notification import NotifyMethod
+
+    method = data.get("method") or NotifyMethod.BOTH
+    if method not in (NotifyMethod.WEBHOOK, NotifyMethod.EMAIL, NotifyMethod.BOTH):
+        raise HTTPException(400, f"method 取值非法: {method}")
+    if method == NotifyMethod.EMAIL and not data.get("target"):
+        raise HTTPException(400, "邮件模式需要 target 收件人")
+
+    cfg = await get_notification_config(db)
+    title = data.get("title") or "自愈通知测试"
+    content = data.get("content") or "这是一条测试通知，用于验证自愈通知通道是否可用。"
+    result = await notify(
+        method=method,
+        target=data.get("target"),
+        title=title,
+        content=content,
+        webhook_url=data.get("webhook_url"),
+        cfg=cfg,
+    )
+    ok = any(result.values())
+    return {"success": ok, "data": result, "message": "通知已尝试发送" if ok else "通知发送失败，详见服务端日志"}

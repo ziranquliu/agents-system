@@ -37,6 +37,9 @@ class Agent(Base):
     enabled_skills = Column(Text)  # JSON: ["skill_id_1", "skill_id_2"]
     enabled_mcp_servers = Column(Text)  # JSON: ["mcp_id_1"]
 
+    # 通知通道
+    webhook_url = Column(String(500))  # Agent 级 Webhook，自愈通知用（优先级高于全局配置）
+
     # 归属
     workspace_id = Column(String(36), nullable=False, index=True)
     created_by = Column(String(36), nullable=False, index=True)

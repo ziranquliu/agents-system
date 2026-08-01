@@ -3,7 +3,7 @@
 """
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import PlainTextResponse, HTMLResponse
+from fastapi.responses import PlainTextResponse, HTMLResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -223,3 +223,38 @@ async def list_exportable_conversations(
         ],
         "total": total,
     }
+
+
+@router.post("/export/batch", summary="批量导出多个对话（多选会话导出）")
+async def batch_export_conversations(
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    conversation_ids = data.get("conversation_ids") or []
+    if not isinstance(conversation_ids, list) or not conversation_ids:
+        raise HTTPException(400, "请至少选择一个对话")
+    if len(conversation_ids) > 50:
+        raise HTTPException(400, "单次批量导出最多 50 个对话")
+
+    export_format = str(data.get("format", "csv") or "csv").lower()
+    if export_format not in ("csv", "json", "html"):
+        raise HTTPException(400, "不支持的导出格式，仅支持 csv / json / html")
+    include_metadata = bool(data.get("include_metadata", False))
+    mask_sensitive = bool(data.get("mask_sensitive", False))
+
+    svc = DialogueEnhancementService(db)
+    try:
+        content, filename = await svc.batch_export_conversations(
+            conversation_ids,
+            export_format=export_format,
+            include_metadata=include_metadata,
+            mask_sensitive=mask_sensitive,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    media_type = "text/csv" if export_format == "csv" else (
+        "application/json; charset=utf-8" if export_format == "json" else "text/html; charset=utf-8"
+    )
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+    return Response(content=content, media_type=media_type, headers=headers)
