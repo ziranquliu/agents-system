@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy import select, func as sa_func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 

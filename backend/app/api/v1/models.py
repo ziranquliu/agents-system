@@ -15,13 +15,14 @@ from app.schemas.model import (
     ModelTestResponse,
 )
 from app.services import model_service
+from app.services.model_binding_service import trigger_auto_sync
 from app.api.v1.auth import get_current_user
 
 router = APIRouter(tags=["模型配置"])
 
 
 def _template_to_response(t) -> ModelConfigResponse:
-    """ORM → Response Schema（含 config JSON 展开）"""
+    """ORM -> Response Schema（含 config JSON 展开）"""
     cfg = {}
     if t.config:
         try:
@@ -113,6 +114,11 @@ async def update_model(
     template = await model_service.update_template(db, template_id, data)
     if not template:
         raise HTTPException(status_code=404, detail="模板不存在")
+    
+    # 更新后自动触发绑定Agent同步
+    sync_result = await trigger_auto_sync(db, template_id, current_user.id)
+    
+    # 刷新响应数据
     return _template_to_response(template)
 
 
@@ -139,4 +145,26 @@ async def test_model(
     result = await model_service.test_template_connection(
         db, template_id, req.messages
     )
+    return result
+
+
+@router.post("/{template_id}/sync-binding-agents")
+async def sync_binding_agents(
+    template_id: str,
+    force: bool = Query(False, description="强制同步，忽略当前状态"),
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """手动触发同步到所有绑定的Agent"""
+    from app.models.agent import ModelConfigTemplate
+    
+    template = await db.execute(
+        select(ModelConfigTemplate).where(ModelConfigTemplate.id == template_id)
+    )
+    template = template.scalar_one_or_none()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="模板不存在")
+    
+    result = await trigger_auto_sync(db, template_id, current_user.id)
     return result

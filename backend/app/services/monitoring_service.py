@@ -7,6 +7,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
+from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy import select, func as sa_func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 

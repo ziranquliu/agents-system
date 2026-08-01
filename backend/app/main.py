@@ -1,23 +1,32 @@
 """
 本地智能体管理系统 - FastAPI 应用入口
 """
+import sys
+import io
+
+# Force UTF-8 encoding for Windows console
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
 from app.api.v1.router import api_router
 from app.core.exception_handlers import register_exception_handlers
+from app.core.error_handler import custom_exception_handler
 
 
 # ============================================================
 # 安全响应头中间件
 # ============================================================
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """添加安全相关的 HTTP 响应头"""
+    """添加安全相关的HTTP 响应头"""
 
     async def dispatch(self, request, call_next):
         response = await call_next(request)
@@ -41,23 +50,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         from app.db.session import check_db_connection
         await check_db_connection()
-        print(f"Server started: {settings.PROJECT_NAME} v{settings.PROJECT_VERSION}")
+        print(f"[INFO] Server started: {settings.PROJECT_NAME} v{settings.PROJECT_VERSION}")
     except Exception as e:
-        print(f"Startup error: {e}")
-        raise
-    # 启动全局定时调度器（组件扫描/更新检测/维护/备份/审计归档等）
+        print(f"[WARN] Startup warning: {e}")
+    # 启动全局定时调度器
     try:
         from app.core.scheduler import start_scheduler
         sched = start_scheduler()
-        print(f"[scheduler] started with {len(sched.get_jobs())} jobs")
+        print(f"[INFO] Scheduler started with {len(sched.get_jobs())} jobs")
     except Exception as e:
-        print(f"[scheduler] start failed (non-fatal): {e}")
+        print(f"[WARN] Scheduler start failed (non-fatal): {e}")
     yield
     from app.core.scheduler import stop_scheduler
     stop_scheduler()
     from app.db.session import close_db_connections
     await close_db_connections()
-    print("Server shutdown complete")
+    print("[INFO] Server shutdown complete")
 
 
 app = FastAPI(
@@ -84,6 +92,11 @@ app.add_middleware(SecurityHeadersMiddleware)
 # 注册统一异常处理
 register_exception_handlers(app)
 
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return await custom_exception_handler(request, exc)
+
 # 注册路由（api_router 已包含 /api/v1 前缀）
 app.include_router(api_router)
 
@@ -99,22 +112,7 @@ async def health_check():
 # ============================================================
 @app.websocket("/ws/chat/{conversation_id}")
 async def websocket_chat(websocket: WebSocket, conversation_id: str):
-    """
-    WebSocket 实时对话
-
-    客户端发送 JSON:
-    ```json
-    {"type": "message", "content": "Hello!", "model": "openai:gpt-4o-mini"}
-    ```
-
-    服务端返回流式响应片段:
-    ```json
-    {"type": "chunk", "content": "Hello! ", "done": false}
-    {"type": "chunk", "content": "How can I ", "done": false}
-    {"type": "done", "content": "How can I help you today?", "model": "gpt-4o-mini"}
-    {"type": "error", "content": "错误信息"}
-    ```
-    """
+    """WebSocket 实时对话"""
     await websocket.accept()
     conversation_messages = []
 
