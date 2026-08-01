@@ -176,6 +176,27 @@ async def export_siem(
     )
 
 
+@router.post("/siem/push", summary="SIEM 集成：推送最近 N 分钟审计日志到配置主机")
+async def push_siem(
+    minutes: int = Query(10, ge=1, le=1440),
+    session: AsyncSession = Depends(get_db),
+):
+    """读取最近 N 分钟审计日志，实际推送到配置的 SIEM 主机（UDP/TCP）。
+
+    返回: {pushed, failed, protocol, host, port, records, minutes}
+    """
+    config = await AuditService.get_config(session)
+    if config is None or not config.siem_enabled:
+        raise HTTPException(status_code=400, detail="SIEM 未启用（siem_enabled=false）")
+    if not (config.siem_host or "").strip():
+        raise HTTPException(status_code=400, detail="SIEM 主机未配置（siem_host 为空）")
+
+    lines = await SIEMExporter.export_recent(session, minutes=minutes)
+    result = await SIEMExporter.send(lines, config=config)
+    result.update({"records": len(lines), "minutes": minutes})
+    return result
+
+
 # ==================== 异常行为检测 ====================
 
 @router.post("/anomalies/scan", summary="执行异常行为检测（内置规则引擎）")

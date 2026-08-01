@@ -8,10 +8,13 @@
 5. SIEM 集成（Syslog 标准格式输出）
 6. 异常行为检测（凌晨操作/高频失败/权限越界/批量删除/敏感操作）
 """
+import asyncio
 import csv
 import hashlib
 import io
 import json
+import logging
+import socket
 from datetime import datetime, timedelta, date
 from typing import Any, Dict, List, Optional
 
@@ -25,6 +28,23 @@ from app.models.audit import (
 
 # 禁止修改/删除审计日志（追加写入保证）
 MUTABLE_FIELDS = set()  # 审计日志无可变字段
+
+logger = logging.getLogger("audit.siem")
+
+# 后台推送任务引用集合（防止 asyncio 任务被 GC 回收，fire-and-forget 模式）
+_FIRE_AND_FORGET_TASKS: set = set()
+
+
+def _spawn_background(coro) -> None:
+    """fire-and-forget：在事件循环中调度协程，失败仅记录日志，绝不抛出到调用方"""
+    async def _runner():
+        try:
+            await coro
+        except Exception:
+            logger.exception("[SIEM] background send failed")
+    task = asyncio.create_task(_runner())
+    _FIRE_AND_FORGET_TASKS.add(task)
+    task.add_done_callback(_FIRE_AND_FORGET_TASKS.discard)
 
 
 class HashChainService:
@@ -159,6 +179,15 @@ class AuditService:
         expected = HashChainService.build_curr_hash(read_back, prev_hash)
         record.verified = (expected == record.curr_hash)
         await session.commit()
+
+        # SIEM 自动推送（fire-and-forget，失败不阻塞主流程）
+        if config and config.siem_enabled:
+            try:
+                line = SIEMExporter.to_syslog(record)
+                _spawn_background(SIEMExporter.send([line], config=config))
+            except Exception:
+                logger.exception("[SIEM] auto push schedule failed")
+
         return record
 
     @staticmethod
@@ -356,6 +385,92 @@ class SIEMExporter:
         stmt = select(AuditLog).where(AuditLog.timestamp >= cutoff).order_by(AuditLog.timestamp.asc())
         records = (await session.execute(stmt)).scalars().all()
         return [SIEMExporter.to_syslog(r) for r in records]
+
+    @staticmethod
+    def _resolve_protocol(protocol: Optional[str]) -> str:
+        """解析传输协议：syslog 默认映射为 udp，其余仅支持 udp/tcp"""
+        proto = (protocol or "syslog").lower()
+        if proto in ("tcp",):
+            return "tcp"
+        return "udp"
+
+    @staticmethod
+    async def _send_udp(lines: List[str], host: str, port: int) -> int:
+        """UDP 发送：每条 Syslog 消息一条独立 UDP 报文"""
+        def _blocking() -> int:
+            sent = 0
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                sock.settimeout(5.0)
+                for line in lines:
+                    sock.sendto(line.encode("utf-8"), (host, port))
+                    sent += 1
+            return sent
+        return await asyncio.to_thread(_blocking)
+
+    @staticmethod
+    async def _send_tcp(lines: List[str], host: str, port: int) -> int:
+        """TCP 发送：所有消息以 \\n 分隔拼接后一次发送"""
+        def _blocking() -> int:
+            with socket.create_connection((host, port), timeout=5.0) as sock:
+                payload = ("\n".join(lines)).encode("utf-8") + b"\n"
+                sock.sendall(payload)
+            return len(lines)
+        return await asyncio.to_thread(_blocking)
+
+    @staticmethod
+    async def send(
+        lines: List[str],
+        config: Optional[AuditConfig] = None,
+        session: Optional[AsyncSession] = None,
+    ) -> Dict[str, Any]:
+        """实际推送 Syslog 消息到配置的 SIEM 主机（UDP/TCP）
+
+        - 读取 AuditConfig 的 siem_enabled / siem_host / siem_port / siem_protocol
+        - protocol=udp → SOCK_DGRAM 发送到 (host, port)，每条一条报文
+        - protocol=tcp → 建立 TCP 连接发送，消息以 \\n 分隔
+        - 发送失败降级：仅记录日志，不抛异常（scheduler/自动推送中容错）
+
+        返回: {pushed, failed, protocol, host, port, enabled, reason/error}
+        """
+        if config is None and session is not None:
+            config = await AuditService.get_config(session)
+
+        if config is None:
+            logger.warning("[SIEM] send skipped: no audit config")
+            return {"pushed": 0, "failed": len(lines), "enabled": False, "reason": "no_config"}
+        if not config.siem_enabled:
+            return {"pushed": 0, "failed": len(lines), "enabled": False, "reason": "disabled"}
+        host = (config.siem_host or "").strip()
+        if not host:
+            logger.warning("[SIEM] send skipped: siem_enabled but siem_host is empty")
+            return {"pushed": 0, "failed": len(lines), "enabled": True, "reason": "no_host"}
+        port = config.siem_port or 514
+        protocol = SIEMExporter._resolve_protocol(config.siem_protocol)
+
+        try:
+            if protocol == "tcp":
+                pushed = await SIEMExporter._send_tcp(lines, host, port)
+            else:
+                pushed = await SIEMExporter._send_udp(lines, host, port)
+            return {
+                "pushed": pushed,
+                "failed": len(lines) - pushed,
+                "protocol": protocol,
+                "host": host,
+                "port": port,
+                "enabled": True,
+            }
+        except Exception as e:
+            logger.error(f"[SIEM] send failed to {host}:{port} ({protocol}): {e}", exc_info=True)
+            return {
+                "pushed": 0,
+                "failed": len(lines),
+                "protocol": protocol,
+                "host": host,
+                "port": port,
+                "enabled": True,
+                "error": str(e),
+            }
 
 
 class AnomalyDetector:
