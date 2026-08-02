@@ -7,7 +7,7 @@ from app.models.user import User
 from app.api.v1.auth import get_current_user
 from app.services import skill_market_service
 
-router = APIRouter(tags=["Skill 在线市场"])
+router = APIRouter(tags=["Skill 在线市场"], dependencies=[Depends(get_current_user)])
 
 
 class RateBody(BaseModel):

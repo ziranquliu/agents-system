@@ -10,6 +10,7 @@ from sqlalchemy import select, func, and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.auth_service import get_current_user
 from app.models.ops import (
     AgentDeployment, AgentDeploymentStatus,
     ScalingPolicy, ScalingEvent, ScalingMetricType, ScalingDirection,
@@ -24,7 +25,7 @@ from app.services.ops_service import (
     _safe_json_loads,
 )
 
-router = APIRouter(prefix="/api/v1/ops", tags=["智能体自动化运维"])
+router = APIRouter(prefix="/api/v1/ops", tags=["智能体自动化运维"], dependencies=[Depends(get_current_user)])
 
 
 # ==================== 4.22.1 自动部署 ====================

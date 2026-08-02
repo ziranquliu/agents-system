@@ -9,9 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.auth_service import get_current_user
 from app.services.token_service import TokenService, OptimizationService
 
-router = APIRouter(prefix="/api/v1/tokens", tags=["Token 使用管理"])
+router = APIRouter(prefix="/api/v1/tokens", tags=["Token 使用管理"], dependencies=[Depends(get_current_user)])
 
 
 def _serialize(record):

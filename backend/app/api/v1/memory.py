@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.auth_service import get_current_user
 from app.services.memory_service import MemoryService
 
-router = APIRouter(prefix="/api/v1/memories", tags=["记忆管理"])
+router = APIRouter(prefix="/api/v1/memories", tags=["记忆管理"], dependencies=[Depends(get_current_user)])
 
 
 def _memory_to_dict(m) -> dict:

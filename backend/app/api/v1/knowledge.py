@@ -10,7 +10,7 @@ from app.models.user import User
 from app.services.auth_service import get_current_user
 from app.services import knowledge_service
 
-router = APIRouter(tags=["知识库"])
+router = APIRouter(tags=["知识库"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/knowledge-bases")

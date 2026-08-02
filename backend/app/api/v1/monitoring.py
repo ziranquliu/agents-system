@@ -9,9 +9,10 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.auth_service import get_current_user
 from app.services.monitoring_service import MonitoringService
 
-router = APIRouter(prefix="/api/v1/monitoring", tags=["监控看板"])
+router = APIRouter(prefix="/api/v1/monitoring", tags=["监控看板"], dependencies=[Depends(get_current_user)])
 
 
 def _alert_config_to_dict(c):

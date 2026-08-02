@@ -11,7 +11,7 @@ from app.schemas.agent import AgentResponse
 from app.services.auth_service import get_current_user
 from app.services import agent_market_service
 
-router = APIRouter(tags=["Agent 在线市场"])
+router = APIRouter(tags=["Agent 在线市场"], dependencies=[Depends(get_current_user)])
 
 
 class MarketAgentItem(BaseModel):

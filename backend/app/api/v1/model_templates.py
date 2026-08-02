@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.auth_service import get_current_user
 from app.services.model_template_service import ModelTemplateService
 
-router = APIRouter(prefix="/api/v1/model-templates", tags=["模型配置模板"])
+router = APIRouter(prefix="/api/v1/model-templates", tags=["模型配置模板"], dependencies=[Depends(get_current_user)])
 
 
 def _version_to_dict(v) -> dict:

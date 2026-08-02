@@ -10,7 +10,7 @@ from app.models.user import User
 from app.services.auth_service import get_current_user
 from app.services import model_market_service
 
-router = APIRouter(tags=["模型在线市场"])
+router = APIRouter(tags=["模型在线市场"], dependencies=[Depends(get_current_user)])
 
 
 class MarketModelItem(BaseModel):

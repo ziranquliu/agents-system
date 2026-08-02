@@ -113,6 +113,32 @@ async def health_check():
 @app.websocket("/ws/chat/{conversation_id}")
 async def websocket_chat(websocket: WebSocket, conversation_id: str):
     """WebSocket 实时对话"""
+    # 鉴权：从 query 参数取 token（WebSocket 无法带 Header）
+    token = websocket.query_params.get("token", "")
+    if not token:
+        await websocket.close(code=4401, reason="Missing token")
+        return
+    try:
+        from app.services.auth_service import decode_access_token
+        from sqlalchemy import select as sa_select
+        from app.db.session import async_session_factory
+        from app.models.user import User
+
+        payload = decode_access_token(token)
+        user_id = payload.get("sub")
+        if not user_id:
+            await websocket.close(code=4401, reason="Invalid token")
+            return
+        async with async_session_factory() as db:
+            res = await db.execute(sa_select(User).where(User.id == user_id))
+            user = res.scalar_one_or_none()
+        if user is None or not user.is_active:
+            await websocket.close(code=4401, reason="User not found or inactive")
+            return
+    except Exception:
+        await websocket.close(code=4401, reason="Invalid token")
+        return
+
     await websocket.accept()
     conversation_messages = []
 

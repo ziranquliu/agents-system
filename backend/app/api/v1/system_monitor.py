@@ -5,9 +5,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.auth_service import get_current_user
 from app.services import system_monitor_service
 
-router = APIRouter(tags=["系统监控"])
+router = APIRouter(tags=["系统监控"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/system/health")

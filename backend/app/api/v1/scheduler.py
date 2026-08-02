@@ -1,11 +1,12 @@
 """
 全局定时调度器 API — 查看调度状态 / 手动触发定时任务
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.scheduler import get_scheduler_status, start_scheduler, stop_scheduler
+from app.services.auth_service import get_current_user
 
-router = APIRouter(prefix="/api/v1/scheduler", tags=["全局定时调度器"])
+router = APIRouter(prefix="/api/v1/scheduler", tags=["全局定时调度器"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/status", summary="调度器运行状态与任务列表")

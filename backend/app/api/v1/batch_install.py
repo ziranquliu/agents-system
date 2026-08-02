@@ -7,9 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.auth_service import get_current_user
 from app.services.batch_install_service import BatchInstallService
 
-router = APIRouter(prefix="/api/v1/batch-install", tags=["批量安装"])
+router = APIRouter(prefix="/api/v1/batch-install", tags=["批量安装"],
+                   dependencies=[Depends(get_current_user)])
 
 
 def _item_to_dict(i):

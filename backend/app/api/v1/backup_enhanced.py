@@ -10,6 +10,7 @@ from sqlalchemy import func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.auth_service import get_current_user
 from app.models.backup_enhanced import (
     BackupRecord, BackupPolicy, BackupEventLog, RestoreOperation,
     RestoreDrill, EncryptionKey,
@@ -20,7 +21,7 @@ from app.services.backup_enhanced_service import (
     KeyManager, BackupEnhancedService, RestoreService, DrillService,
 )
 
-router = APIRouter(prefix="/api/v1/backup-enhanced", tags=["各智能体备份与恢复(增强)"])
+router = APIRouter(prefix="/api/v1/backup-enhanced", tags=["各智能体备份与恢复(增强)"], dependencies=[Depends(get_current_user)])
 
 JSON_FIELDS = {"data_stats", "precheck_result", "restored_stats", "report_data", "event_meta", "event_types"}
 

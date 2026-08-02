@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.auth_service import get_current_user
 from app.models.audit import (
     AuditLog, AuditArchive, AuditRule, AuditAlert, AuditConfig,
     AuditCategory, AuditResult, AnomalyType, AlertSeverity,
@@ -20,7 +21,7 @@ from app.services.audit_service import (
     AuditService, HashChainService, SIEMExporter, AnomalyDetector,
 )
 
-router = APIRouter(prefix="/api/v1/audit", tags=["操作审计"])
+router = APIRouter(prefix="/api/v1/audit", tags=["操作审计"], dependencies=[Depends(get_current_user)])
 
 CATEGORIES = [AuditCategory.USER, AuditCategory.AGENT, AuditCategory.SYSTEM, AuditCategory.SECURITY]
 RESULTS = [AuditResult.SUCCESS, AuditResult.FAILURE, AuditResult.DENIED]

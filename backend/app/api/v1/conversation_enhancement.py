@@ -9,7 +9,7 @@ from app.models.user import User
 from app.services.auth_service import get_current_user
 from app.services import conversation_enhancement_service
 
-router = APIRouter(tags=["会话增强"])
+router = APIRouter(tags=["会话增强"], dependencies=[Depends(get_current_user)])
 
 
 # ---- Token 管理 ----

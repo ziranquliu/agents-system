@@ -10,6 +10,7 @@ from sqlalchemy import func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.auth_service import get_current_user
 from app.models.health import (
     HealthCheckRun, HealthSnapshot, HealthScoreWeight, AgentHealthConfig,
     HealthTrendPoint, HealthEvent,
@@ -20,7 +21,7 @@ from app.services.health_service import (
     HealthConfigService,
 )
 
-router = APIRouter(prefix="/api/v1/health", tags=["各智能体健康监控"])
+router = APIRouter(prefix="/api/v1/health", tags=["各智能体健康监控"], dependencies=[Depends(get_current_user)])
 
 JSON_FIELDS = {"details", "score_details", "l3_failed_items", "apply_agents", "l3_skills", "l3_mcp_servers"}
 

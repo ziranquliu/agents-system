@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.auth_service import get_current_user
 from app.services.skill_reuse_service import SkillReuseService
 
-router = APIRouter(prefix="/api/v1/skill-reuse", tags=["Skill 复用"])
+router = APIRouter(prefix="/api/v1/skill-reuse", tags=["Skill 复用"], dependencies=[Depends(get_current_user)])
 
 
 def _relation_to_dict(r):

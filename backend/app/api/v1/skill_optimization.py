@@ -5,9 +5,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.auth_service import get_current_user
 from app.services import skill_optimization_service
 
-router = APIRouter(tags=["Skill 优化"])
+router = APIRouter(tags=["Skill 优化"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/skills/optimization/cache-stats")

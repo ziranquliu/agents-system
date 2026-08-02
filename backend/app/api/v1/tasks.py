@@ -12,7 +12,7 @@ from app.models.user import User
 from app.services.auth_service import get_current_user
 from app.services import task_service
 
-router = APIRouter(tags=["任务管理"])
+router = APIRouter(tags=["任务管理"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/tasks")

@@ -14,7 +14,7 @@ from app.models.user import User
 from app.services.auth_service import get_current_user
 from app.services import collaboration_service
 
-router = APIRouter(tags=["多智能体协作"])
+router = APIRouter(tags=["多智能体协作"], dependencies=[Depends(get_current_user)])
 
 
 class TaskCreate(BaseModel):

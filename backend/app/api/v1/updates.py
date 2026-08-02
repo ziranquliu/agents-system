@@ -10,7 +10,7 @@ from app.models.user import User
 from app.services.auth_service import get_current_user
 from app.services import update_service
 
-router = APIRouter(tags=["更新检测"])
+router = APIRouter(tags=["更新检测"], dependencies=[Depends(get_current_user)])
 
 
 class UpdateItem(BaseModel):

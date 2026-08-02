@@ -10,7 +10,7 @@ from app.models.user import User
 from app.services.auth_service import get_current_user
 from app.services import scanner_service
 
-router = APIRouter(tags=["组件扫描器"])
+router = APIRouter(tags=["组件扫描器"], dependencies=[Depends(get_current_user)])
 
 
 class ScanSummary(BaseModel):

@@ -63,7 +63,7 @@ export const useWSStore = create<WSState>()(
       onError: null,
       
       connect: async (sessionId: string, baseUrl?: string) => {
-        const url = `${baseUrl || DEFAULT_BASE_URL.replace('http', 'ws').replace('https', 'wss')}/ws/v1/chat/${sessionId}`
+        const url = `${baseUrl || DEFAULT_BASE_URL.replace('http', 'ws').replace('https', 'wss')}/ws/chat/${sessionId}?token=${encodeURIComponent(localStorage.getItem('token') || '')}`
         
         set((state) => ({
           connections: new Map(state.connections).set(sessionId, {
