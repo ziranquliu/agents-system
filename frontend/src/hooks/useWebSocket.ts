@@ -115,3 +115,6 @@ export function useWebSocketChat({
     attemptReconnect,
   }
 }
+
+// 导出别名，兼容不同命名
+export const useWebSocket = useWebSocketChat
