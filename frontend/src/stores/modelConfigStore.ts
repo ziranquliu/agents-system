@@ -19,12 +19,6 @@ interface ModelConfigState {
   setSearch: (s: string) => void
   setProviderFilter: (p: string) => void
   setPage: (p: number) => void
-  // ---- 模板版本 / 绑定 ----
-  fetchVersions: (templateId: string) => Promise<{ items: api.ModelVersionInfo[]; total: number }>
-  fetchBindings: (templateId: string) => Promise<{ items: api.ModelBindingInfo[]; total: number }>
-  rollbackVersion: (templateId: string, version: number) => Promise<void>
-  deleteVersion: (templateId: string, version: number) => Promise<void>
-  syncTemplate: (templateId: string, options?: { force?: boolean }) => Promise<void>
 }
 
 export const useModelConfigStore = create<ModelConfigState>((set, get) => ({
@@ -79,17 +73,4 @@ export const useModelConfigStore = create<ModelConfigState>((set, get) => ({
   setSearch: (search) => { set({ search, page: 1 }); get().fetch({ search, page: 1 }) },
   setProviderFilter: (provider) => { set({ providerFilter: provider, page: 1 }); get().fetch({ provider, page: 1 }) },
   setPage: (page) => { set({ page }); get().fetch({ page }) },
-
-  // ---- 模板版本 / 绑定 ----
-  fetchVersions: async (templateId) => api.listModelVersions(templateId),
-  fetchBindings: async (templateId) => api.listModelBindings(templateId),
-  rollbackVersion: async (templateId, version) => {
-    await api.rollbackModelVersion(templateId, version)
-  },
-  deleteVersion: async (templateId, version) => {
-    await api.deleteModelVersion(templateId, version)
-  },
-  syncTemplate: async (templateId, _options) => {
-    await api.syncModelTemplate(templateId)
-  },
 }))
