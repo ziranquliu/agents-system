@@ -1,9 +1,14 @@
 """
 应用配置管理 - 基于 pydantic-settings 的环境变量加载
 """
+import logging
 import secrets
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Optional
+
+logger = logging.getLogger("config")
 
 
 class Settings(BaseSettings):
@@ -31,8 +36,8 @@ class Settings(BaseSettings):
     # 认证与安全
     # ============================================================
 
-    # JWT 密钥（生产环境务必通过环境变量设置强密钥）
-    SECRET_KEY: str = secrets.token_urlsafe(48)
+    # JWT 密钥（生产环境必须通过环境变量 SECRET_KEY 显式设置强密钥；开发环境自动生成）
+    SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_MINUTES: int = 60 * 24  # 24 hours
     # Token 刷新
@@ -70,6 +75,21 @@ class Settings(BaseSettings):
     MODEL_PROVIDERS: List[str] = ["openai", "ollama", "openrouter"]
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    @model_validator(mode="after")
+    def _resolve_secret_key(self) -> "Settings":
+        # 生产环境必须通过环境变量显式提供强密钥；
+        # 开发/测试环境未设置时自动生成，避免每次重启共享同一弱密钥。
+        if not self.SECRET_KEY:
+            if self.ENVIRONMENT == "production":
+                raise ValueError(
+                    "生产环境必须通过环境变量 SECRET_KEY 显式设置强密钥"
+                )
+            self.SECRET_KEY = secrets.token_urlsafe(48)
+            logger.warning(
+                "SECRET_KEY 未设置，已为开发环境自动生成。生产环境请通过环境变量显式配置。"
+            )
+        return self
 
 
 settings = Settings()
