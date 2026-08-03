@@ -7,8 +7,9 @@ import functools
 from typing import Optional
 
 from jose import jwt  # python-jose
-from fastapi import Request, HTTPException
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 from redis import Redis
 
 from app.core.config import settings
@@ -16,8 +17,16 @@ from app.core.config import settings
 _redis_client: Optional[Redis] = None
 
 
+class RateLimitExceeded(Exception):
+    """限流超限（中间件内部使用；由 dispatch 捕获并返回 429 响应）"""
+
+    def __init__(self, window: int, limit: int):
+        self.window = window
+        self.limit = limit
+
+
 def _get_redis() -> Optional[Redis]:
-    """懒初始化 Redis 客户端（失败返回 None，限流降级为放行）"""
+    """懒初始化 Redis 客户端（失败返回 None，限流降级为放行；下次调用重试）"""
     global _redis_client
     if _redis_client is None:
         try:
@@ -26,7 +35,9 @@ def _get_redis() -> Optional[Redis]:
                 socket_connect_timeout=1,
                 socket_timeout=1,
             )
+            _redis_client.ping()
         except Exception:
+            # 启动时 Redis 可能未就绪：置空，下次调用重新尝试
             _redis_client = None
     return _redis_client
 
@@ -36,9 +47,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     # 默认限流配置
     DEFAULT_LIMITS = {
-        "user": {"requests": 60, "window": 60},      # 每用户60次/分钟
-        "ip": {"requests": 100, "window": 60},       # 每IP 100次/分钟
-        "global": {"requests": 1000, "window": 60},  # 全局1000次/分钟
+        "user": {"requests": 300, "window": 60},     # 每用户300次/分钟（业务操作）
+        "ip": {"requests": 600, "window": 60},       # 每IP 600次/分钟（SPA页面加载友好）
+        "global": {"requests": 10000, "window": 60}, # 全局10000次/分钟
     }
 
     def __init__(self, app, redis_client: Redis = None):
@@ -49,6 +60,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # WebSocket 请求透传，不参与 HTTP 限流
         if request.scope.get("type") != "http":
             return await call_next(request)
+
+        # 启动时 Redis 可能未就绪而拿到 None：每次请求尝试懒重连（恢复后自动启用限流）
+        if self.redis is None:
+            self.redis = _get_redis()
 
         client_ip = self._get_client_ip(request)
         user_id = self._get_user_id(request)
@@ -77,8 +92,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     self.DEFAULT_LIMITS["user"]["requests"],
                     self.DEFAULT_LIMITS["user"]["window"],
                 )
-        except HTTPException:
-            raise
+        except RateLimitExceeded as e:
+            # 中间件位于异常处理链外，HTTPException 会冒泡；直接构造 429 响应
+            return JSONResponse(
+                status_code=429,
+                content={"detail": f"请求过于频繁，请{e.window}秒后重试"},
+                headers={
+                    "Retry-After": str(e.window),
+                    "X-RateLimit-Limit": str(e.limit),
+                    "X-RateLimit-Remaining": "0",
+                },
+            )
         except Exception:
             # Redis 不可用等异常：降级放行，不阻断服务
             pass
@@ -105,7 +129,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return response
 
     async def _check_limit(self, key: str, limit: int, window: int):
-        """检查限流（Redis 不可用时直接放行）"""
+        """检查限流（Redis 不可用时直接放行；超限抛 RateLimitExceeded）"""
         if not self.redis:
             return
 
@@ -114,11 +138,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             self.redis.expire(key, window)
 
         if current > limit:
-            raise HTTPException(
-                status_code=429,
-                detail=f"请求过于频繁，请{window}秒后重试",
-                headers={"Retry-After": str(window)},
-            )
+            raise RateLimitExceeded(window, limit)
 
     def _remaining(self, key: str, limit: int) -> int:
         cur = self.redis.get(key)
@@ -191,10 +211,10 @@ def rate_limit(requests: int = 60, window: int = 60):
     return decorator
 
 
-# 按接口限流配置（敏感接口更严格）
+# 按接口限流配置（敏感接口更严格，但需容忍误操作/重试）
 API_RATE_LIMITS = {
-    "/api/v1/auth/login": {"requests": 5, "window": 60},      # 登录限制 5次/分钟
-    "/api/v1/auth/register": {"requests": 3, "window": 60},   # 注册限制 3次/分钟
-    "/api/v1/chat/stream": {"requests": 10, "window": 60},    # 对话流式 10次/分钟
-    "/api/v1/models": {"requests": 30, "window": 60},         # 模型列表 30次/分钟
+    "/api/v1/auth/login": {"requests": 20, "window": 60},    # 登录 20次/分钟
+    "/api/v1/auth/register": {"requests": 10, "window": 60}, # 注册 10次/分钟
+    "/api/v1/chat/stream": {"requests": 60, "window": 60},   # 对话流式 60次/分钟
+    "/api/v1/models": {"requests": 120, "window": 60},       # 模型列表 120次/分钟
 }
