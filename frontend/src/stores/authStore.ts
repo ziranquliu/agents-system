@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { UserInfo } from '../api/auth'
+import type { UserInfo, RegisterPayload } from '../api/auth'
 import * as authApi from '../api/auth'
 
 interface AuthState {
@@ -9,6 +9,7 @@ interface AuthState {
   initialized: boolean
 
   login: (username: string, password: string) => Promise<void>
+  register: (payload: RegisterPayload) => Promise<void>
   logout: () => Promise<void>
   checkAuth: () => Promise<void>
 }
@@ -23,6 +24,19 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading: true })
     try {
       const res = await authApi.login(username, password)
+      localStorage.setItem('token', res.access_token)
+      localStorage.setItem('user', JSON.stringify(res.user))
+      set({ user: res.user, token: res.access_token, loading: false })
+    } catch (e) {
+      set({ loading: false })
+      throw e
+    }
+  },
+
+  register: async (payload: RegisterPayload) => {
+    set({ loading: true })
+    try {
+      const res = await authApi.register(payload)
       localStorage.setItem('token', res.access_token)
       localStorage.setItem('user', JSON.stringify(res.user))
       set({ user: res.user, token: res.access_token, loading: false })

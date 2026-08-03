@@ -38,12 +38,14 @@ import SchedulerPage from './pages/SchedulerPage'
 import TokenPage from './pages/TokenPage'
 import SystemMonitorPage from './pages/SystemMonitorPage'
 import Login from './pages/Login'
+import Register from './pages/Register'
 import NotFound from './pages/NotFound'
 
 function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
       <Route path="/" element={<MainLayout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />

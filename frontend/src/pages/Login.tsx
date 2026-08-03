@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 
 export default function Login() {
@@ -87,6 +87,16 @@ export default function Login() {
               )}
             </button>
           </form>
+
+          <p className="mt-6 text-center text-sm text-gray-500">
+            还没有账号？
+            <Link
+              to="/register"
+              className="text-blue-600 hover:text-blue-700 font-medium ml-1"
+            >
+              立即注册
+            </Link>
+          </p>
         </div>
       </div>
     </div>

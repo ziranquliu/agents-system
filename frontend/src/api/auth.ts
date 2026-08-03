@@ -19,12 +19,25 @@ export interface LoginResponse {
   user: UserInfo
 }
 
+export interface RegisterPayload {
+  username: string
+  email: string
+  password: string
+  display_name?: string
+}
+
 /** 登录 */
 export async function login(username: string, password: string) {
   const { data } = await client.post<LoginResponse>('/auth/login', {
     username,
     password,
   })
+  return data
+}
+
+/** 注册（成功即返回 token，可自动登录） */
+export async function register(payload: RegisterPayload) {
+  const { data } = await client.post<LoginResponse>('/auth/register', payload)
   return data
 }
 
