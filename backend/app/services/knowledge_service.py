@@ -2,6 +2,7 @@
 知识库服务 - CRUD/文档管理/检索
 """
 import json
+import logging
 import uuid
 from typing import Optional
 
@@ -10,6 +11,14 @@ from sqlalchemy import select, func, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import KnowledgeBase, KnowledgeDocument, KnowledgeChunk
+from app.services.embedding_service import (
+    get_embeddings,
+    cosine_similarity,
+    json_loads_vector,
+    serialize_vector,
+)
+
+logger = logging.getLogger("knowledge")
 
 
 async def list_knowledge_bases(
@@ -91,6 +100,20 @@ async def add_document(
     kb.chunk_count = (kb.chunk_count or 0) + len(chunks)
     await db.flush()
 
+    # 向量化入库（尽力而为：embedding 失败/未配置时跳过，不阻塞文档入库）
+    try:
+        texts = [c.content for c in chunks]
+        vectors = await get_embeddings(texts)
+        if vectors and len(vectors) == len(chunks):
+            for chunk, vec in zip(chunks, vectors):
+                chunk.embedding = serialize_vector(vec)
+            await db.flush()
+            logger.info("[knowledge] document %s embedded %d chunks", doc.id, len(chunks))
+        else:
+            logger.info("[knowledge] document %s embed skipped (no vectors)", doc.id)
+    except Exception as e:
+        logger.warning("[knowledge] document %s embed failed: %s", doc.id, e)
+
     return doc
 
 
@@ -143,15 +166,69 @@ async def search_knowledge(
     query: str,
     top_k: int = 5,
 ) -> list[dict]:
-    """搜索知识库（关键词匹配）"""
-    result = await db.execute(
+    """混合检索：向量召回 + 关键词召回，按相关性分数排序。
+
+    - 向量召回：query 向量 与 chunk.embedding 余弦相似度
+    - 关键词召回：content ILIKE 匹配
+    - 融合评分 = 0.7 * 向量分 + 0.3 * 关键词分（关键词命中给 1.0）
+    - 无 embedding 配置/向量化失败 → 回退纯关键词检索（score=1.0，向后兼容）
+    """
+    # 关键词召回
+    kw_result = await db.execute(
         select(KnowledgeChunk)
         .where(KnowledgeChunk.knowledge_base_id == kb_id)
         .where(KnowledgeChunk.content.ilike(f"%{query}%"))
-        .limit(top_k)
+        .limit(top_k * 3)
     )
-    chunks = result.scalars().all()
+    kw_chunks = kw_result.scalars().all()
+    kw_ids = {c.id for c in kw_chunks}
 
+    # 向量召回（尽力而为）
+    query_vec = None
+    try:
+        vecs = await get_embeddings([query])
+        if vecs:
+            query_vec = vecs[0]
+    except Exception as e:
+        logger.warning("[knowledge] search embed failed: %s", e)
+        query_vec = None
+
+    if query_vec:
+        # 取该知识库所有带向量的 chunk
+        vec_result = await db.execute(
+            select(KnowledgeChunk)
+            .where(KnowledgeChunk.knowledge_base_id == kb_id)
+            .where(KnowledgeChunk.embedding.isnot(None))
+        )
+        vec_chunks = vec_result.scalars().all()
+        scored = []
+        for c in vec_chunks:
+            cvec = json_loads_vector(c.embedding)
+            if not cvec:
+                continue
+            v_score = cosine_similarity(query_vec, cvec)
+            k_score = 1.0 if c.id in kw_ids else 0.0
+            fused = round(0.7 * v_score + 0.3 * k_score, 4)
+            scored.append((c, fused, v_score, k_score))
+        # 按融合分降序
+        scored.sort(key=lambda x: x[1], reverse=True)
+        top = scored[:top_k]
+        if top:
+            return [
+                {
+                    "chunk_id": c.id,
+                    "content": c.content,
+                    "chunk_index": c.chunk_index,
+                    "token_count": c.token_count,
+                    "document_id": c.document_id,
+                    "score": fused,
+                    "vector_score": round(v_score, 4),
+                    "keyword_score": k_score,
+                }
+                for c, fused, v_score, k_score in top
+            ]
+
+    # 回退：纯关键词检索（保持向后兼容）
     return [
         {
             "chunk_id": c.id,
@@ -161,7 +238,7 @@ async def search_knowledge(
             "document_id": c.document_id,
             "score": 1.0,  # 关键词匹配得分
         }
-        for c in chunks
+        for c in kw_chunks[:top_k]
     ]
 
 

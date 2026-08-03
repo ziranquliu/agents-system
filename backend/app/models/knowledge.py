@@ -57,7 +57,8 @@ class KnowledgeChunk(Base):
     knowledge_base_id = Column(String(36), ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=False, index=True)
     content = Column(Text, nullable=False)
     chunk_metadata = Column(Text, nullable=True)  # JSON
-    embedding_id = Column(String(100), nullable=True)  # Qdrant point ID
+    embedding_id = Column(String(100), nullable=True)  # Qdrant point ID (保留兼容)
+    embedding = Column(Text, nullable=True)  # 向量 JSON 数组（内嵌存储，避免外部 Qdrant 依赖）
     chunk_index = Column(Integer, default=0)
     token_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)

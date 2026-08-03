@@ -2,6 +2,7 @@
 对话补全接口 - 支持 SSE 流式响应
 """
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -13,9 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.user import User
+from app.models.semantic_cache import DEFAULT_SIMILARITY_THRESHOLD, DEFAULT_TTL_SECONDS
 from app.services.auth_service import get_current_user
 from app.services.llm import create_adapter, list_supported_providers
 from app.services.model_service import get_template
+from app.services.semantic_cache_service import semantic_cache_service
+
+logger = logging.getLogger("chat")
 
 router = APIRouter()
 
@@ -79,7 +84,50 @@ async def chat_completions(
     if data.stream:
         return _stream_response(adapter, messages_dict, data)
 
-    # 非流式响应
+    # ===== Semantic Cache (A8) =====
+    # 非流式对话：命中缓存直接返回，未命中走 LLM 并写入缓存
+    # 查询文本 = 最后一条 user 消息
+    query_text = _last_user_message(messages_dict)
+
+    cached_answer = None
+    if query_text:
+        try:
+            cached_answer = await semantic_cache_service.get_cached_answer(
+                session=db,
+                query=query_text,
+                model=adapter_config.get("model_name"),
+                threshold=DEFAULT_SIMILARITY_THRESHOLD,
+                ttl_seconds=DEFAULT_TTL_SECONDS,
+            )
+        except Exception as e:
+            # 缓存查询失败不阻塞主流程
+            logger.warning("[semantic_cache] get_cached_answer error: %s", e)
+            cached_answer = None
+
+    resp_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+    created = int(datetime.now(timezone.utc).timestamp())
+
+    if cached_answer:
+        # 缓存命中：直接返回缓存答案
+        logger.info("[semantic_cache] HIT query=%r", query_text)
+        return ChatCompletionResponse(
+            id=resp_id,
+            model=adapter_config.get("model_name", "unknown"),
+            choices=[{
+                "index": 0,
+                "message": {"role": "assistant", "content": cached_answer},
+                "finish_reason": "stop",
+            }],
+            usage={
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "cached": True,
+            },
+            created=created,
+        )
+
+    # 缓存未命中：调用 LLM
     try:
         result = await adapter.chat(
             messages=messages_dict,
@@ -89,7 +137,20 @@ async def chat_completions(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Model request failed: {str(e)}")
 
-    resp_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+    # 写入语义缓存（尽力而为：失败不阻塞响应）
+    if query_text:
+        try:
+            await semantic_cache_service.store_answer(
+                session=db,
+                query=query_text,
+                answer=result.content,
+                model=adapter_config.get("model_name"),
+                threshold=DEFAULT_SIMILARITY_THRESHOLD,
+                ttl_seconds=DEFAULT_TTL_SECONDS,
+            )
+        except Exception as e:
+            logger.warning("[semantic_cache] store_answer error: %s", e)
+
     return ChatCompletionResponse(
         id=resp_id,
         model=result.model,
@@ -103,8 +164,16 @@ async def chat_completions(
             "completion_tokens": 0,
             "total_tokens": 0,
         },
-        created=int(datetime.now(timezone.utc).timestamp()),
+        created=created,
     )
+
+
+def _last_user_message(messages: list[dict]) -> Optional[str]:
+    """取最后一条 user 消息内容作为语义缓存查询文本"""
+    for msg in reversed(messages):
+        if msg.get("role") == "user" and msg.get("content"):
+            return str(msg["content"])
+    return None
 
 
 def _resolve_model_config(model_str: str) -> dict:

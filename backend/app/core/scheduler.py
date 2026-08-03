@@ -248,6 +248,54 @@ async def _run_health_snapshot():
         logger.error(f"[scheduler] health snapshot failed: {e}")
 
 
+# ==================== 运维报告定时生成（B2.5） ====================
+
+async def _run_report_task(report_type: str, period_start: datetime, period_end: datetime):
+    """生成运维报告（日/周/月），生成后自动推送通知"""
+    try:
+        from app.services.ops_service import ReportService
+
+        async with async_session_factory() as session:
+            report = await ReportService.generate_report(
+                session,
+                report_type=report_type,
+                period_start=period_start,
+                period_end=period_end,
+                notify=True,
+                created_by="scheduler",
+            )
+            await session.commit()
+        logger.info(f"[scheduler] {report_type} report generated: {period_start.date()} ~ {period_end.date()}")
+    except Exception as e:
+        logger.error(f"[scheduler] {report_type} report generation failed: {e}")
+
+
+async def _run_daily_report():
+    """日报：每日 08:00（统计昨日 00:00 ~ 24:00）"""
+    now = datetime.now()
+    yesterday = now - timedelta(days=1)
+    start = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    await _run_report_task("daily", start, end)
+
+
+async def _run_weekly_report():
+    """周报：每周一 08:30（统计上周一 00:00 ~ 本周一 00:00）"""
+    now = datetime.now()
+    start = (now - timedelta(days=now.weekday(), weeks=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    end = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    await _run_report_task("weekly", start, end)
+
+
+async def _run_monthly_report():
+    """月报：每月 1 日 09:00（统计上月 1 日 00:00 ~ 本月 1 日 00:00）"""
+    now = datetime.now()
+    first_this = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_month_end = first_this - timedelta(days=1)
+    first_last = last_month_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    await _run_report_task("monthly", first_last, first_this)
+
+
 # ==================== 调度器管理 ====================
 
 def _register_fixed_jobs():
@@ -308,6 +356,28 @@ def _register_fixed_jobs():
         id="maintenance_dynamic_1h",
         replace_existing=True,
         misfire_grace_time=1800,
+    )
+    # 运维报告定时生成（B2.5）：日报每日 08:00、周报周一 08:30、月报每月 1 日 09:00
+    scheduler.add_job(
+        _run_daily_report,
+        trigger=CronTrigger(hour=8, minute=0),
+        id="ops_report_daily",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        _run_weekly_report,
+        trigger=CronTrigger(day_of_week="mon", hour=8, minute=30),
+        id="ops_report_weekly",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        _run_monthly_report,
+        trigger=CronTrigger(day=1, hour=9, minute=0),
+        id="ops_report_monthly",
+        replace_existing=True,
+        misfire_grace_time=7200,
     )
 
 

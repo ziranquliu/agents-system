@@ -776,13 +776,23 @@ class ReportService:
         report_type: ReportType,
         period_start: datetime,
         period_end: datetime,
+        notify: bool = True,
+        created_by: str = "system",
     ) -> OpsReport:
-        """生成运维报告（汇总各维度数据）"""
+        """生成运维报告（汇总各维度数据），生成后可通过通知通道推送
+
+        notify=True 时，生成后通过 notification_service（webhook/邮件）推送摘要。
+        """
+        from app.services.monitoring_service import MonitoringService
+        from app.services.token_service import TokenService
+        from app.services.notification_service import get_notification_config, notify
+
+        days = max((period_end - period_start).days, 1)
         # 采集数据
         deploy_stats = await DeploymentService.get_stats(session)
-        scaling_stats = await AutoScalingService.get_scaling_stats(session, days=(period_end - period_start).days or 1)
-        log_stats = await LogService.get_log_stats(session, days=(period_end - period_start).days or 1)
-        heal_stats = await SelfHealService.get_heal_stats(session, days=(period_end - period_start).days or 1)
+        scaling_stats = await AutoScalingService.get_scaling_stats(session, days=days)
+        log_stats = await LogService.get_log_stats(session, days=days)
+        heal_stats = await SelfHealService.get_heal_stats(session, days=days)
 
         # 维护执行数
         maint_stmt = select(func.count(MaintenanceExecution.id)).where(
@@ -810,12 +820,34 @@ class ReportService:
         top_result = await session.execute(top_agents_stmt)
         top_agents = [{"name": r.agent_name, "count": r.count} for r in top_result.all()]
 
-        # 资源趋势（占位，实际从监控服务获取）
-        resource_trends = {
-            "avg_cpu": None,
-            "avg_memory": None,
-            "avg_response_time": None,
-        }
+        # 资源趋势（真实数据：监控服务最新指标聚合）
+        resource_trends = {"avg_cpu": None, "avg_memory": None, "avg_response_time": None, "avg_health_score": None, "agent_count": 0}
+        try:
+            monitor = MonitoringService(session)
+            latest = await monitor.get_latest_metrics()
+            if latest:
+                cpus = [m.get("cpu_percent") for m in latest.values() if m.get("cpu_percent") is not None]
+                mems = [m.get("memory_mb") for m in latest.values() if m.get("memory_mb") is not None]
+                p95s = [m.get("latency_p95") for m in latest.values() if m.get("latency_p95") is not None]
+                healths = [m.get("health_score") for m in latest.values() if m.get("health_score") is not None]
+                qps = sum(m.get("qps") or 0 for m in latest.values())
+                resource_trends = {
+                    "avg_cpu": round(sum(cpus) / len(cpus), 2) if cpus else None,
+                    "avg_memory": round(sum(mems) / len(mems), 2) if mems else None,
+                    "avg_response_time": round(sum(p95s) / len(p95s), 2) if p95s else None,
+                    "avg_health_score": round(sum(healths) / len(healths), 2) if healths else None,
+                    "total_qps": round(qps, 2),
+                    "agent_count": len(latest),
+                }
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"生成报告：获取资源趋势失败: {exc}")
+
+        # Token 消耗（真实数据）
+        token_stats = {}
+        try:
+            token_stats = await TokenService.get_stats(session, days=days)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"生成报告：获取 Token 统计失败: {exc}")
 
         availability = deploy_stats.get("success_rate", 100)
         total_requests = log_stats.get("total", 0) * 2  # 估算
@@ -828,6 +860,14 @@ class ReportService:
             suggestions.append(f"有 {deploy_stats['failed']} 次部署失败，请检查部署模板")
         if error_count > total_requests * 0.05:
             suggestions.append("错误率超过 5%，建议优先处理")
+        if token_stats.get("total_cost"):
+            suggestions.append(
+                f"周期内 Token 消耗 {token_stats.get('total_tokens', 0)} 个，成本 ${token_stats.get('total_cost', 0):.4f}"
+            )
+        if resource_trends.get("avg_cpu") and resource_trends["avg_cpu"] > 80:
+            suggestions.append("平均 CPU 使用率超过 80%，建议扩容或优化")
+        if resource_trends.get("avg_health_score") is not None and resource_trends["avg_health_score"] < 70:
+            suggestions.append("平均健康评分低于 70，建议排查异常 Agent")
 
         raw_data = {
             "deployment": deploy_stats,
@@ -836,6 +876,8 @@ class ReportService:
             "healing": heal_stats,
             "maintenance_count": maint_count,
             "top_agents": top_agents,
+            "resource_trends": resource_trends,
+            "token_usage": token_stats,
         }
 
         report = OpsReport(
@@ -853,10 +895,42 @@ class ReportService:
             top_agents=json.dumps(top_agents),
             resource_trends=json.dumps(resource_trends),
             suggestions="\n".join(suggestions) if suggestions else "系统运行状态良好，无需特别关注。",
-            raw_data=json.dumps(raw_data),
+            raw_data=json.dumps(raw_data, ensure_ascii=False, default=str),
+            created_by=created_by,
         )
         session.add(report)
         await session.flush()
+
+        # 生成后推送通知（webhook / 邮件，复用 notification_service）
+        if notify:
+            try:
+                cfg = await get_notification_config(session)
+                content = "\n".join(
+                    [
+                        f"报告类型: {report_type.value if hasattr(report_type, 'value') else report_type}",
+                        f"统计周期: {period_start.date()} ~ {period_end.date()}",
+                        f"可用率: {availability}%",
+                        f"总请求: {total_requests}，错误: {error_count}",
+                        f"自愈次数: {heal_stats.get('total', 0)}（成功 {heal_stats.get('success', 0)}）",
+                        f"扩缩容事件: {scaling_stats.get('total', 0)}",
+                        f"维护执行: {maint_count}",
+                        f"Token 消耗: {token_stats.get('total_tokens', 0)}（成本 ${token_stats.get('total_cost', 0):.4f}）",
+                        f"平均健康评分: {resource_trends.get('avg_health_score', '-')}",
+                        "",
+                        "建议:",
+                        "\n".join(suggestions) if suggestions else "系统运行状态良好，无需特别关注。",
+                    ]
+                )
+                await notify(
+                    method=cfg.notify_method,
+                    target=cfg.default_recipients,
+                    title=f"[运维报告] {report.title}",
+                    content=content,
+                    webhook_url=cfg.webhook_url,
+                    cfg=cfg,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"生成报告：推送通知失败: {exc}")
         return report
 
     @staticmethod

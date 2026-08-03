@@ -9,8 +9,40 @@ from app.db.session import get_db
 from app.models.user import User
 from app.services.auth_service import get_current_user
 from app.services import knowledge_service
+from app.services.semantic_cache_service import semantic_cache_service
+from app.services.embedding_service import get_embeddings
 
 router = APIRouter(tags=["知识库"], dependencies=[Depends(get_current_user)])
+
+
+class SemanticCacheTestRequest(BaseModel):
+    """语义缓存测试请求"""
+    query: str = Field(..., min_length=1, description="查询文本")
+    threshold: float = Field(0.92, ge=0.0, le=1.0, description="相似度阈值")
+    ttl_seconds: int = Field(3600, ge=0, description="TTL（秒），0 表示不设置过期")
+
+
+@router.post("/semantic-cache/test", summary="语义缓存测试：验证命中/写入")
+async def semantic_cache_test(
+    payload: SemanticCacheTestRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """验证语义缓存：先查缓存（命中直接返回），未命中返回 miss（不写缓存，仅测试）"""
+    ttl = payload.ttl_seconds if payload.ttl_seconds > 0 else None
+    answer = await semantic_cache_service.get_cached_answer(
+        session=db,
+        query=payload.query,
+        threshold=payload.threshold,
+        ttl_seconds=ttl,
+    )
+    cache_size = await semantic_cache_service.count(db)
+    return {
+        "query": payload.query,
+        "hit": answer is not None,
+        "answer": answer,
+        "threshold": payload.threshold,
+        "cache_size": cache_size,
+    }
 
 
 @router.get("/knowledge-bases")

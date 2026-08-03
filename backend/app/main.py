@@ -11,6 +11,8 @@ if sys.platform == 'win32':
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
+import asyncio
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -204,3 +206,118 @@ async def websocket_chat(websocket: WebSocket, conversation_id: str):
             await websocket.send_json({"type": "error", "content": f"Connection error: {str(e)}"})
         except Exception:
             pass
+
+
+# ============================================================
+# WebSocket - 实时监控（B2.6）
+# ============================================================
+_monitor_clients: set = set()
+_monitor_lock = asyncio.Lock()
+
+
+async def _build_monitor_snapshot() -> dict:
+    """构建监控快照：健康评分 / QPS / Token / 资源占用"""
+    from app.db.session import async_session_factory
+    from app.services.monitoring_service import MonitoringService
+    from app.services.token_service import TokenService
+
+    async with async_session_factory() as db:
+        monitor = MonitoringService(db)
+        latest = await monitor.get_latest_metrics()
+        agents = list(latest.values())
+
+        health_scores = [a.get("health_score") for a in agents if a.get("health_score") is not None]
+        qps_values = [a.get("qps") for a in agents if a.get("qps") is not None]
+        cpu_values = [a.get("cpu_percent") for a in agents if a.get("cpu_percent") is not None]
+        mem_values = [a.get("memory_mb") for a in agents if a.get("memory_mb") is not None]
+
+        token_stats = await TokenService.get_stats(db, days=1)
+
+        snapshot = {
+            "type": "monitor_snapshot",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "health_score": round(sum(health_scores) / len(health_scores), 2) if health_scores else 0,
+            "qps": round(sum(qps_values), 2) if qps_values else 0,
+            "token": {
+                "total_tokens": token_stats.get("total_tokens", 0),
+                "total_cost": round(token_stats.get("total_cost", 0), 4),
+                "total_records": token_stats.get("total_records", 0),
+                "cached_tokens": token_stats.get("cached_tokens", 0),
+                "compressed_tokens": token_stats.get("compressed_tokens", 0),
+            },
+            "resources": {
+                "avg_cpu": round(sum(cpu_values) / len(cpu_values), 2) if cpu_values else 0,
+                "avg_memory_mb": round(sum(mem_values) / len(mem_values), 2) if mem_values else 0,
+                "agent_count": len(agents),
+            },
+            "agents": agents,
+        }
+        return snapshot
+
+
+async def _monitor_broadcast_loop():
+    """后台广播任务：每 5s 向所有已连接客户端推送监控快照"""
+    while True:
+        try:
+            if _monitor_clients:
+                snapshot = await _build_monitor_snapshot()
+                disconnected = []
+                for ws in list(_monitor_clients):
+                    try:
+                        await ws.send_json(snapshot)
+                    except Exception:
+                        disconnected.append(ws)
+                for ws in disconnected:
+                    _monitor_clients.discard(ws)
+        except Exception as e:
+            print(f"[monitor] broadcast error: {e}")
+        await asyncio.sleep(5)
+
+
+@app.websocket("/ws/monitor")
+async def websocket_monitor(websocket: WebSocket):
+    """WebSocket 实时监控：连接后每 5s 推送一次监控快照"""
+    token = websocket.query_params.get("token", "")
+    if not token:
+        await websocket.close(code=4401, reason="Missing token")
+        return
+    try:
+        from app.services.auth_service import decode_access_token
+        from sqlalchemy import select as sa_select
+        from app.db.session import async_session_factory
+        from app.models.user import User
+
+        payload = decode_access_token(token)
+        user_id = payload.get("sub")
+        if not user_id:
+            await websocket.close(code=4401, reason="Invalid token")
+            return
+        async with async_session_factory() as db:
+            res = await db.execute(sa_select(User).where(User.id == user_id))
+            user = res.scalar_one_or_none()
+        if user is None or not user.is_active:
+            await websocket.close(code=4401, reason="User not found or inactive")
+            return
+    except Exception:
+        await websocket.close(code=4401, reason="Invalid token")
+        return
+
+    await websocket.accept()
+    _monitor_clients.add(websocket)
+    print(f"[monitor] client connected, total={len(_monitor_clients)}")
+
+    # 首次连接启动后台广播任务
+    async def _start_broadcaster():
+        if not any(t.get_name() == "monitor_broadcast" for t in asyncio.all_tasks()):
+            await asyncio.create_task(_monitor_broadcast_loop(), name="monitor_broadcast")
+
+    try:
+        await _start_broadcaster()
+        while True:
+            # 等待客户端消息（心跳/断开检测）
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        _monitor_clients.discard(websocket)
+        print(f"[monitor] client disconnected, total={len(_monitor_clients)}")

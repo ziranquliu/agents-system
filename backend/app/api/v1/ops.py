@@ -504,19 +504,33 @@ async def heal_stats(
 
 @router.post("/reports/generate", summary="生成运维报告")
 async def generate_report(
-    body: dict,
+    body: Optional[dict] = None,
+    period: Optional[str] = Query(None, description="统计周期: daily / weekly / monthly"),
+    notify: bool = Query(True, description="生成后是否推送通知"),
     session: AsyncSession = Depends(get_db),
 ):
+    """生成运维报告
+
+    支持两种方式指定周期：
+    1. query: POST /ops/reports/generate?period=daily
+    2. body: {"report_type": "daily", "notify": true}
+    """
     period_end = datetime.utcnow()
-    report_type = body.get("report_type", "daily")
+    body = body or {}
+    report_type = (period or body.get("report_type") or "daily").lower()
     if report_type == ReportType.DAILY:
         period_start = period_end - timedelta(days=1)
     elif report_type == ReportType.WEEKLY:
         period_start = period_end - timedelta(weeks=1)
     else:
+        report_type = ReportType.MONTHLY
         period_start = period_end - timedelta(days=30)
 
-    report = await ReportService.generate_report(session, report_type, period_start, period_end)
+    should_notify = body.get("notify", notify)
+    report = await ReportService.generate_report(
+        session, report_type, period_start, period_end, notify=should_notify
+    )
+    await session.commit()
     return {"code": 0, "data": report, "message": "报告已生成"}
 
 
