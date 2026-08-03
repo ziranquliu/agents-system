@@ -11,6 +11,7 @@ import math
 from typing import Optional
 
 from app.services.llm import create_adapter
+from app.core.encryption import decrypt_secret
 
 logger = logging.getLogger("embedding")
 
@@ -67,7 +68,7 @@ def build_embedding_adapter_config(
             "model_name": template.model or DEFAULT_EMBEDDING_MODEL,
             "embedding_model": template_cfg.get("embedding_model") or DEFAULT_EMBEDDING_MODEL,
             "endpoint": template_cfg.get("endpoint", ""),
-            "api_key": template_cfg.get("api_key", ""),
+            "api_key": decrypt_secret(template_cfg.get("api_key", "")),
         }
     else:
         cfg = {

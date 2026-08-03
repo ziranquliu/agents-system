@@ -9,6 +9,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agent import ModelConfigTemplate
+from app.core.encryption import encrypt_secret
 
 _DATA_DIR = Path(__file__).parent.parent / "data"
 _MARKET_FILE = _DATA_DIR / "model_market.json"
@@ -91,7 +92,7 @@ async def install_model(
         "context_window": context_window,
     }
     if api_key:
-        config_json["api_key"] = api_key
+        config_json["api_key"] = encrypt_secret(api_key)
 
     # 更新安装计数
     _increment_install_count(model_id)

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.skill import MCPServer
 from app.schemas.mcp import MCPServerCreate, MCPServerUpdate, MCPServerResponse
+from app.core.encryption import encrypt_secret
 
 
 # 状态映射：DB ↔ API
@@ -102,7 +103,7 @@ async def create_server(db: AsyncSession, data: MCPServerCreate) -> MCPServer:
     auth_config = None
     if data.api_key:
         auth_type = "api_key"
-        auth_config = json.dumps({"api_key": data.api_key})
+        auth_config = json.dumps({"api_key": encrypt_secret(data.api_key)})
 
     server = MCPServer(
         id=str(uuid.uuid4()),
@@ -138,7 +139,7 @@ async def update_server(db: AsyncSession, server_id: str, data: MCPServerUpdate)
         api_key = update_data.pop("api_key")
         if api_key is not None:
             update_data["auth_type"] = "api_key"
-            update_data["auth_config"] = json.dumps({"api_key": api_key})
+            update_data["auth_config"] = json.dumps({"api_key": encrypt_secret(api_key)})
 
     # config → JSON
     if "config" in update_data:

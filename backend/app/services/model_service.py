@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.agent import ModelConfigTemplate
 from app.schemas.model import ModelConfigCreate, ModelConfigUpdate
 from app.services.llm import create_adapter
+from app.core.encryption import encrypt_secret, decrypt_secret
 
 
 # ── 辅助: config JSON ↔ 字段映射 ──────────────────────────────
@@ -37,7 +38,7 @@ def _config_to_dict(template: ModelConfigTemplate) -> dict:
         "provider": template.provider,
         "model_name": template.model,  # ORM 字段名叫 model，schema 叫 model_name
         "endpoint": cfg.get("endpoint", ""),
-        "api_key_masked": _mask_api_key(cfg.get("api_key", "")),
+        "api_key_masked": _mask_api_key(decrypt_secret(cfg.get("api_key", ""))),
         "temperature": cfg.get("temperature"),
         "max_tokens": cfg.get("max_tokens"),
         "context_window": cfg.get("context_window"),
@@ -59,12 +60,14 @@ def _mask_api_key(api_key: str) -> Optional[str]:
 
 
 def _build_config_json(data) -> str:
-    """从 schema 中提取 config 字段并序列化为 JSON"""
+    """从 schema 中提取 config 字段并序列化为 JSON（api_key 加密落库，B3.1）"""
     cfg = {}
     for field in CONFIG_FIELDS:
         val = getattr(data, field, None)
         if val is not None:
             cfg[field] = val
+    if cfg.get("api_key"):
+        cfg["api_key"] = encrypt_secret(cfg["api_key"])
     return json.dumps(cfg, ensure_ascii=False)
 
 
@@ -170,6 +173,9 @@ async def update_template(
             has_config_change = True
 
     if has_config_change:
+        # api_key 更新时加密落库（B3.1）
+        if config_dict.get("api_key"):
+            config_dict["api_key"] = encrypt_secret(config_dict["api_key"])
         template.config = json.dumps(config_dict, ensure_ascii=False)
 
     # 剩余的直接字段
@@ -212,7 +218,7 @@ async def test_template_connection(
     config = {
         "provider": template.provider,
         "endpoint": config_dict.get("endpoint", ""),
-        "api_key": config_dict.get("api_key", ""),
+        "api_key": decrypt_secret(config_dict.get("api_key", "")),
         "model_name": template.model,
     }
 

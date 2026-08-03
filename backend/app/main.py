@@ -50,6 +50,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """应用生命周期管理"""
     try:
         from app.db.session import check_db_connection
+        # 使用应用 SECRET_KEY 初始化敏感字段加密（B3.1）
+        from app.core.encryption import EncryptionHelper
+        EncryptionHelper.initialize(settings.SECRET_KEY or None)
         await check_db_connection()
         print(f"[INFO] Server started: {settings.PROJECT_NAME} v{settings.PROJECT_VERSION}")
     except Exception as e:

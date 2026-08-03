@@ -15,6 +15,7 @@ from app.schemas.model import (
     ModelTestResponse,
 )
 from app.services import model_service
+from app.core.encryption import decrypt_secret
 from app.services.model_binding_service import trigger_auto_sync
 from app.api.v1.auth import get_current_user
 
@@ -30,7 +31,7 @@ def _template_to_response(t) -> ModelConfigResponse:
         except (json.JSONDecodeError, TypeError):
             cfg = {}
 
-    api_key = cfg.get("api_key", "")
+    api_key = decrypt_secret(cfg.get("api_key", ""))
     if api_key and len(api_key) > 8:
         api_key_masked = api_key[:4] + "***" + api_key[-4:]
     elif api_key:
