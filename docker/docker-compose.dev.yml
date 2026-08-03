@@ -7,7 +7,8 @@ services:
     container_name: agent-postgres
     environment:
       POSTGRES_USER: agent
-      POSTGRES_PASSWORD: agent_pass_2024
+      # 开发默认密码；生产环境请通过环境变量覆盖（如: docker compose --env-file .env up）
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agent_pass_2024}
       POSTGRES_DB: agent_system
     ports:
       - "5432:5432"
@@ -66,7 +67,8 @@ services:
     container_name: agent-pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@agents.local
-      PGADMIN_DEFAULT_PASSWORD: admin_2024
+      # 开发默认密码；生产环境请通过环境变量覆盖
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin_2024}
       PGADMIN_CONFIG_SERVER_MODE: "False"
     ports:
       - "5050:80"
