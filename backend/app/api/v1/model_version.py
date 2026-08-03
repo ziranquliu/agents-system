@@ -5,7 +5,7 @@
 from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -349,6 +349,13 @@ async def trigger_sync(
 
 
 async def _notify_binding_agents_sync(db: AsyncSession, template_id: str):
-    """通知绑定的Agent需要同步（异步通知，不阻塞主流程）"""
-    # TODO: 实现消息队列通知机制
-    pass
+    """模板配置变更后标记所有绑定为outdated（Agent需重新同步）
+
+    采用DB状态标记（A7：Redis事件总线为已知缺口，接入后可改为事件推送）
+    """
+    await db.execute(
+        update(ModelTemplateBinding)
+        .where(ModelTemplateBinding.template_id == template_id)
+        .values(binding_status="outdated", updated_at=datetime.utcnow())
+    )
+    await db.commit()

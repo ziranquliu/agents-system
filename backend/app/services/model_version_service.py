@@ -8,7 +8,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, update
 from sqlalchemy.orm import selectinload
 
 from app.models.agent import ModelConfigTemplate
@@ -219,10 +219,9 @@ class ModelVersionService:
             if not template:
                 return {"status": "failed", "error": "模板不存在"}
             
-            # 检查是否需要同步
-            if not force and binding.binding_status == "synced":
-                # 检查是否有新binding或override变更
-                pass
+            # 同步为幂等合并：override优先，重复同步安全
+            # （模板配置变更时由 _notify_binding_agents_sync 将绑定标记为 outdated，
+            #  此处无需再做变更检测，直接执行合并即可）
             
             # 更新Agent的模型配置
             agent = await self._get_agent(binding.agent_id)
@@ -258,9 +257,15 @@ class ModelVersionService:
             return {"status": "failed", "error": str(e)}
     
     async def _notify_binding_agents_sync(self, template_id: str):
-        """通知绑定的Agent需要同步"""
-        # TODO: 实现消息队列通知机制
-        pass
+        """模板配置发生变化时，标记所有绑定为outdated，提示Agent需重新同步
+
+        采用DB状态标记（A7：Redis事件总线为已知缺口，接入后可改为事件推送）
+        """
+        await self.db.execute(
+            update(ModelTemplateBinding)
+            .where(ModelTemplateBinding.template_id == template_id)
+            .values(binding_status="outdated", updated_at=datetime.utcnow())
+        )
     
     async def _get_template(self, template_id: str) -> Optional[ModelConfigTemplate]:
         """获取模板"""

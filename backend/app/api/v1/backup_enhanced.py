@@ -20,6 +20,7 @@ from app.models.backup_enhanced import (
 from app.services.backup_enhanced_service import (
     KeyManager, BackupEnhancedService, RestoreService, DrillService,
 )
+from app.core.scheduler import refresh_backup_jobs
 
 router = APIRouter(prefix="/api/v1/backup-enhanced", tags=["各智能体备份与恢复(增强)"], dependencies=[Depends(get_current_user)])
 
@@ -77,6 +78,8 @@ async def upsert_policy(
         drill_cron=body.get("drill_cron", "0 4 * * 0"),
         default_scope=body.get("default_scope", "all"),
     )
+    # 策略变更后动态重建调度任务（4.23）
+    await refresh_backup_jobs()
     return {"code": 0, "data": _serialize(policy), "message": "策略已保存"}
 
 
@@ -99,6 +102,8 @@ async def delete_policy(
     ok = await BackupEnhancedService.delete_policy(session, policy_id)
     if not ok:
         raise HTTPException(status_code=404, detail="策略不存在")
+    # 策略删除后同步移除调度任务
+    await refresh_backup_jobs()
     return {"code": 0, "message": "策略已停用"}
 
 

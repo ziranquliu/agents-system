@@ -217,6 +217,113 @@ async def _run_drill_job():
         logger.error(f"[scheduler] drill job failed: {e}")
 
 
+async def _run_policy_backup(agent_id: str, agent_name: str):
+    """单策略全量备份（按 BackupPolicy.full_backup_cron 触发）"""
+    try:
+        from app.services.backup_enhanced_service import BackupEnhancedService
+        from app.models.backup_enhanced import BackupType
+        async with async_session_factory() as session:
+            await BackupEnhancedService.create_backup(
+                session, agent_id=agent_id, agent_name=agent_name,
+                backup_type=BackupType.FULL, created_by="scheduler",
+            )
+            await session.commit()
+        logger.info(f"[scheduler] policy full backup done: {agent_id}")
+    except Exception as e:
+        logger.error(f"[scheduler] policy backup failed {agent_id}: {e}")
+
+
+async def _run_policy_incremental(agent_id: str, agent_name: str):
+    """单策略增量备份（按 BackupPolicy.incremental_interval_hours 触发）"""
+    try:
+        from app.services.backup_enhanced_service import BackupEnhancedService
+        from app.models.backup_enhanced import BackupType
+        async with async_session_factory() as session:
+            await BackupEnhancedService.create_backup(
+                session, agent_id=agent_id, agent_name=agent_name,
+                backup_type=BackupType.INCREMENTAL, created_by="scheduler",
+            )
+            await session.commit()
+        logger.info(f"[scheduler] policy incremental backup done: {agent_id}")
+    except Exception as e:
+        logger.error(f"[scheduler] policy incremental backup failed {agent_id}: {e}")
+
+
+async def _run_policy_drill(agent_id: str, agent_name: str):
+    """单策略恢复演练（按 BackupPolicy.drill_cron 触发）"""
+    try:
+        from app.services.backup_enhanced_service import BackupEnhancedService, DrillService
+        async with async_session_factory() as session:
+            backups, _ = await BackupEnhancedService.list_backups(
+                session, agent_id=agent_id, limit=1
+            )
+            if backups:
+                await DrillService.create_drill(
+                    session, agent_id=agent_id, agent_name=agent_name,
+                    backup_id=backups[0].id, created_by="scheduler",
+                )
+                await session.commit()
+        logger.info(f"[scheduler] policy drill done: {agent_id}")
+    except Exception as e:
+        logger.error(f"[scheduler] policy drill failed {agent_id}: {e}")
+
+
+async def refresh_backup_jobs():
+    """按启用中的备份策略动态注册 全量/增量/演练 任务（幂级）
+
+    - 清理旧的 backup_* 任务后，依据每个策略自身的 full_backup_cron /
+      incremental_interval_hours / drill_cron / drill_enabled 重新注册。
+    - 调度器未运行时为空操作；被 start_scheduler 与备份策略增删改接口调用。
+    """
+    if scheduler is None or not scheduler.running:
+        return False
+    try:
+        from app.services.backup_enhanced_service import BackupEnhancedService
+        for job in list(scheduler.get_jobs()):
+            if job.id.startswith(("backup_full_", "backup_incr_", "backup_drill_")):
+                scheduler.remove_job(job.id)
+
+        async with async_session_factory() as session:
+            policies, _ = await BackupEnhancedService.list_policies(session, enabled_only=True)
+        count = 0
+        for p in policies:
+            try:
+                full_cron = p.full_backup_cron or "0 3 * * *"
+                incr_hours = p.incremental_interval_hours or 6
+                agent_id, agent_name = p.agent_id, p.agent_name
+                scheduler.add_job(
+                    _run_policy_backup,
+                    trigger=CronTrigger.from_crontab(full_cron),
+                    args=(agent_id, agent_name),
+                    id=f"backup_full_{agent_id}",
+                    replace_existing=True, misfire_grace_time=3600,
+                )
+                scheduler.add_job(
+                    _run_policy_incremental,
+                    trigger=IntervalTrigger(hours=incr_hours),
+                    args=(agent_id, agent_name),
+                    id=f"backup_incr_{agent_id}",
+                    replace_existing=True, misfire_grace_time=1800,
+                )
+                if p.drill_enabled:
+                    drill_cron = p.drill_cron or "0 4 * * 0"
+                    scheduler.add_job(
+                        _run_policy_drill,
+                        trigger=CronTrigger.from_crontab(drill_cron),
+                        args=(agent_id, agent_name),
+                        id=f"backup_drill_{agent_id}",
+                        replace_existing=True, misfire_grace_time=3600,
+                    )
+                count += 1
+            except Exception as e:
+                logger.warning(f"[scheduler] 策略 {p.agent_id} 备份任务注册失败: {e}")
+        logger.info(f"[scheduler] refreshed backup jobs for {count} policies")
+        return True
+    except Exception as e:
+        logger.error(f"[scheduler] refresh_backup_jobs failed: {e}")
+        return False
+
+
 async def _run_audit_maintenance():
     """审计日志归档与保留期清理（4.25）"""
     try:
@@ -328,28 +435,7 @@ def _register_fixed_jobs():
         replace_existing=True,
         misfire_grace_time=300,
     )
-    # 备份任务：以默认值注册，随后在 refresh 时按策略动态调整
-    scheduler.add_job(
-        _run_backup_job,
-        trigger=CronTrigger(hour=3, minute=0),
-        id="backup_full_daily",
-        replace_existing=True,
-        misfire_grace_time=3600,
-    )
-    scheduler.add_job(
-        _run_incremental_backup_job,
-        trigger=IntervalTrigger(hours=6),
-        id="backup_incremental_6h",
-        replace_existing=True,
-        misfire_grace_time=1800,
-    )
-    scheduler.add_job(
-        _run_drill_job,
-        trigger=CronTrigger(day_of_week="sun", hour=4, minute=0),
-        id="backup_drill_weekly",
-        replace_existing=True,
-        misfire_grace_time=3600,
-    )
+    # 备份/恢复演练任务：按策略动态注册（见 refresh_backup_jobs）
     scheduler.add_job(
         _run_maintenance,
         trigger=IntervalTrigger(hours=1),
@@ -390,6 +476,15 @@ def start_scheduler() -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
     _register_fixed_jobs()
     scheduler.start()
+    # 初始按策略注册备份/演练任务（延迟2秒，等DB连接就绪）
+    scheduler.add_job(
+        refresh_backup_jobs,
+        trigger="date",
+        run_date=datetime.now() + timedelta(seconds=2),
+        id="initial_backup_refresh",
+        replace_existing=True,
+        misfire_grace_time=60,
+    )
     logger.info(f"[scheduler] started with {len(scheduler.get_jobs())} jobs")
     return scheduler
 
