@@ -8,8 +8,11 @@
 5. 优化效果评估（压缩率/缓存命中率/成本节省率）
 """
 import json
+import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import func, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -133,10 +136,11 @@ class TokenService:
 
         await session.commit()
 
-        # 预算检查（不因检查失败而影响记录）
+        # 预算检查（不因检查失败而影响记录，但失败需可见）
         try:
             budget_check = await TokenService.check_budget(session, user_id, input_tokens + output_tokens)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Token预算检查失败，按不拦截处理: {e}")
             budget_check = {"blocked": False, "alerts": [], "usage_pct": None}
 
         return {

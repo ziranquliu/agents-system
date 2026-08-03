@@ -129,13 +129,14 @@ async def trigger_scan(user_id: str = "system") -> ComponentScan:
         await db.flush()
 
         # 变化检测与告警（对比上一次扫描）
+        # 告警失败不应影响扫描结果本身，只记录日志（避免 rollback 连带丢弃整个扫描）
         try:
             alerts = await _detect_changes_and_alert(db, scan)
             if alerts:
                 scan.summary = json.dumps({**totals, "alerts": len(alerts)}, ensure_ascii=False)
-            await db.commit()
-        except Exception:
-            await db.rollback()
+        except Exception as e:
+            logger.warning(f"扫描变化检测/告警失败，忽略: {e}")
+        await db.commit()
 
     return scan
 
