@@ -8,12 +8,10 @@ import {
   Server, 
   RefreshCw, 
   Trash2,
-  ChevronDown,
-  ChevronUp,
   AlertCircle,
   CheckCircle
 } from 'lucide-react'
-import { useModelTemplateStore } from '../stores/modelConfigStore'
+import { useModelConfigStore } from '../stores/modelConfigStore'
 import { formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 
@@ -25,7 +23,7 @@ interface VersionItem {
   provider: string
   model: string
   config: string
-  change_log: string
+  change_log: string | null
   created_by: string
   created_at: string
 }
@@ -36,14 +34,18 @@ interface BindingItem {
   agent_id: string
   sync_mode: string
   override_config: string
-  gray_percentage: int
+  gray_percentage: number
   gray_status: string
-  last_synced_at: string
-  agent_name?: string
-  agent_status?: string
+  last_synced_at: string | null
+  agent_name?: string | null
+  agent_status?: string | null
 }
 
-const VersionTimeline: React.FC<{ versions: VersionItem[] }> = ({ versions }) => {
+const VersionTimeline: React.FC<{
+  versions: VersionItem[]
+  onRollback: (version: number) => void
+  onDelete: (version: number) => void
+}> = ({ versions, onRollback, onDelete }) => {
   return (
     <div className="relative">
       {/* 时间线主线 */}
@@ -100,14 +102,14 @@ const VersionTimeline: React.FC<{ versions: VersionItem[] }> = ({ versions }) =>
             <div className="mt-3 flex gap-2">
               <button 
                 className="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded transition-colors"
-                onClick={() => handleRollback(version.version)}
+                onClick={() => onRollback(version.version)}
               >
                 <RotateCcw size={14} />
                 回滚到此版本
               </button>
               <button 
                 className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded transition-colors"
-                onClick={() => handleDelete(version.version)}
+                onClick={() => onDelete(version.version)}
               >
                 <Trash2 size={14} />
                 删除
@@ -120,7 +122,10 @@ const VersionTimeline: React.FC<{ versions: VersionItem[] }> = ({ versions }) =>
   )
 }
 
-const AgentBindingList: React.FC<{ bindings: BindingItem[] }> = ({ bindings }) => {
+const AgentBindingList: React.FC<{
+  bindings: BindingItem[]
+  onSync: (templateId: string, agentId: string) => void
+}> = ({ bindings, onSync }) => {
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       <table className="min-w-full divide-y divide-gray-200">
@@ -176,7 +181,7 @@ const AgentBindingList: React.FC<{ bindings: BindingItem[] }> = ({ bindings }) =
               <td className="px-6 py-4">
                 <button 
                   className="text-blue-600 hover:text-blue-700 text-sm"
-                  onClick={() => handleSync(binding.template_id, binding.agent_id)}
+                  onClick={() => onSync(binding.template_id, binding.agent_id)}
                 >
                   强制同步
                 </button>
@@ -190,7 +195,7 @@ const AgentBindingList: React.FC<{ bindings: BindingItem[] }> = ({ bindings }) =
 }
 
 const ModelVersionPage: React.FC<{ templateId: string }> = ({ templateId }) => {
-  const { templates, fetchVersions, fetchBindings, rollbackVersion, deleteVersion, syncTemplate } = useModelTemplateStore()
+  const { fetchVersions, fetchBindings, rollbackVersion, deleteVersion, syncTemplate } = useModelConfigStore()
   
   const [versions, setVersions] = useState<VersionItem[]>([])
   const [bindings, setBindings] = useState<BindingItem[]>([])
@@ -247,7 +252,7 @@ const ModelVersionPage: React.FC<{ templateId: string }> = ({ templateId }) => {
     }
   }
   
-  const handleSync = async (templateId: string, agentId: string) => {
+  const handleSync = async (templateId: string, _agentId: string) => {
     try {
       await syncTemplate(templateId, { force: true })
       await loadBindings()
@@ -312,14 +317,18 @@ const ModelVersionPage: React.FC<{ templateId: string }> = ({ templateId }) => {
               <p>暂无版本历史</p>
             </div>
           ) : (
-            <VersionTimeline versions={versions} />
+            <VersionTimeline
+              versions={versions}
+              onRollback={handleRollback}
+              onDelete={handleDelete}
+            />
           )}
         </div>
       )}
       
       {/* 绑定Agent列表 */}
       {activeTab === 'bindings' && (
-        <AgentBindingList bindings={bindings} />
+        <AgentBindingList bindings={bindings} onSync={handleSync} />
       )}
     </div>
   )

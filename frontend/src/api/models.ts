@@ -113,3 +113,68 @@ export async function testModelConnection(id: string) {
   const { data } = await client.post<ModelTestResponse>(`/models/${id}/test`)
   return data
 }
+
+/* ==================== 模型模板版本 / 绑定 ==================== */
+
+export interface ModelVersionInfo {
+  id: string
+  template_id: string
+  version: number
+  name: string
+  provider: string
+  model: string
+  config: string
+  change_log: string | null
+  created_by: string
+  created_at: string
+}
+
+export interface ModelBindingInfo {
+  id: string
+  template_id: string
+  agent_id: string
+  sync_mode: string
+  override_config: string
+  gray_percentage: number
+  gray_status: string
+  last_synced_at: string | null
+  agent_name?: string | null
+  agent_status?: string | null
+  binding_status: string
+}
+
+/** 获取模板版本历史 */
+export async function listModelVersions(templateId: string) {
+  const { data } = await client.get<{ items: ModelVersionInfo[]; total: number }>(
+    `/models/${templateId}/versions`
+  )
+  return data
+}
+
+/** 回滚到指定版本 */
+export async function rollbackModelVersion(templateId: string, targetVersion: number) {
+  const { data } = await client.post(`/models/${templateId}/rollback`, {
+    target_version: targetVersion,
+  })
+  return data
+}
+
+/** 获取绑定Agent列表 */
+export async function listModelBindings(templateId: string) {
+  const { data } = await client.get<{ items: ModelBindingInfo[]; total: number }>(
+    `/models/${templateId}/bound-agents`
+  )
+  return data
+}
+
+/** 同步模板到所有绑定Agent */
+export async function syncModelTemplate(templateId: string) {
+  const { data } = await client.post(`/models/${templateId}/sync`)
+  return data
+}
+
+/** 删除指定版本 */
+export async function deleteModelVersion(templateId: string, version: number) {
+  const { data } = await client.delete(`/models/${templateId}/versions/${version}`)
+  return data
+}

@@ -2,6 +2,7 @@
 模型模板版本管理 API
 提供版本历史、回滚、绑定同步等功能
 """
+from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func, and_
@@ -89,6 +90,45 @@ async def get_version(
     return ModelVersionResponse.from_orm(version_record)
 
 
+@router.delete("/{template_id}/versions/{version}", response_model=dict)
+async def delete_version(
+    template_id: str,
+    version: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """删除指定版本（不允许删除当前版本）"""
+    # 验证模板存在
+    template = await model_service.get_template(db, template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="模板不存在")
+
+    # 验证版本存在
+    result = await db.execute(
+        select(ModelTemplateVersion).where(
+            and_(
+                ModelTemplateVersion.template_id == template_id,
+                ModelTemplateVersion.version == version
+            )
+        )
+    )
+    version_record = result.scalar_one_or_none()
+    if not version_record:
+        raise HTTPException(status_code=404, detail=f"版本 {version} 不存在")
+
+    if version == template.version:
+        raise HTTPException(status_code=400, detail="不允许删除当前版本")
+
+    await db.delete(version_record)
+    await db.commit()
+
+    return {
+        "success": True,
+        "deleted_version": version,
+        "message": f"版本 {version} 已删除",
+    }
+
+
 @router.post("/{template_id}/rollback", response_model=dict)
 async def rollback_to_version(
     template_id: str,
@@ -129,7 +169,6 @@ async def rollback_to_version(
     if template.config != target.config:
         # 创建新版本记录
         new_version = template.version + 1
-        from datetime import datetime
         import uuid
         current_version = ModelTemplateVersion(
             id=str(uuid.uuid4()),
@@ -246,11 +285,6 @@ async def trigger_sync(
     for binding in bindings:
         try:
             # 获取绑定的Agent
-            agent_result = await db.execute(
-                select(ModelConfigTemplate).where(ModelConfigTemplate.id == binding.agent_id)
-            )
-            # 注意：这里应该是查询 Agent 表而不是 ModelConfigTemplate
-            # 暂时简化处理
             from app.models.agent import Agent as AgentModel
             agent_query = await db.execute(
                 select(AgentModel).where(AgentModel.id == binding.agent_id)

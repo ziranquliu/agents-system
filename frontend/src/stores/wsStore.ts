@@ -20,6 +20,7 @@ export interface WSMessage {
   token?: string
   tool?: string
   args?: Record<string, any>
+  model?: string
   message_id?: string
   error?: string
   latency_ms?: number
@@ -35,6 +36,7 @@ export interface WSConnection {
   lastError: string | null
   messages: WSMessage[]
   isStreaming: boolean
+  isManualDisconnect: boolean
 }
 
 interface WSState {
@@ -75,6 +77,7 @@ export const useWSStore = create<WSState>()(
             lastError: null,
             messages: [],
             isStreaming: false,
+            isManualDisconnect: false,
           })
         }))
         
@@ -254,7 +257,7 @@ export const useWSStore = create<WSState>()(
     }),
     {
       name: 'ws-store',
-      partialize: (state) => ({
+      partialize: () => ({
         // 不持久化连接状态
       }),
     }

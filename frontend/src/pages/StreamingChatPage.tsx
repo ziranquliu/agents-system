@@ -2,10 +2,10 @@
  * 流式对话页面
  */
 import React, { useState, useRef, useEffect } from 'react'
-import { Send, StopCircle, Bot, User } from 'lucide-react'
+import { StopCircle, Bot } from 'lucide-react'
 import { useWebSocketChat } from '../hooks/useWebSocket'
 import { ChatInput } from '../components/ChatInput'
-import { ChatMessageItem, ChatMessagesList, ChatMessage } from '../components/ChatMessage'
+import { ChatMessagesList, ChatMessage } from '../components/ChatMessage'
 
 interface StreamingChatPageProps {
   sessionId?: string
@@ -14,7 +14,6 @@ interface StreamingChatPageProps {
 
 const StreamingChatPage: React.FC<StreamingChatPageProps> = ({ 
   sessionId = 'default-session',
-  agentId 
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [currentToken, setCurrentToken] = useState('')
@@ -50,7 +49,7 @@ const StreamingChatPage: React.FC<StreamingChatPageProps> = ({
         timestamp: new Date(),
       }])
     },
-    onToolCall: (tool: string, args) => {
+    onToolCall: (tool: string) => {
       setMessages(prev => [...prev, {
         id: `tool-${Date.now()}`,
         role: 'tool',
