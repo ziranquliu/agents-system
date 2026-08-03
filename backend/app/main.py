@@ -2,12 +2,11 @@
 本地智能体管理系统 - FastAPI 应用入口
 """
 import sys
-import io
 
 # Force UTF-8 encoding for Windows console
 if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -90,6 +89,12 @@ app.add_middleware(
 
 # 安全响应头
 app.add_middleware(SecurityHeadersMiddleware)
+
+# 限流中间件（按配置启用；Redis 不可用时自动降级为放行）
+from app.core.ratelimit import RateLimitMiddleware, _get_redis
+
+if settings.RATE_LIMIT_ENABLED:
+    app.add_middleware(RateLimitMiddleware, redis_client=_get_redis())
 
 # 注册统一异常处理
 register_exception_handlers(app)

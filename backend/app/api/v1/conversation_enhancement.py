@@ -72,7 +72,7 @@ async def archive_conversation(
 @router.get("/conversations/{conversation_id}/export")
 async def export_conversation(
     conversation_id: str,
-    format: str = Query("json", regex="^(json|markdown)$"),
+    format: str = Query("json", pattern="^(json|markdown)$"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
