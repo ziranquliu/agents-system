@@ -19,7 +19,7 @@ async def admin_user(db):
         is_active=True
     )
     db.add(user)
-    await db.commit()
+    db.commit()
     return user
 
 
@@ -35,12 +35,9 @@ async def editor_user(db):
         is_active=True
     )
     db.add(user)
-    await db.commit()
+    db.commit()
     return user
-
-
-@pytest.mark.asyncio
-async def test_admin_can_access_all(admin_client: TestClient):
+def test_admin_can_access_all(admin_client: TestClient):
     """测试管理员可以访问所有接口"""
     # Agent管理
     response = admin_client.get("/api/v1/agents")
@@ -53,10 +50,7 @@ async def test_admin_can_access_all(admin_client: TestClient):
         headers={"Authorization": "Bearer admin_token"}
     )
     assert response.status_code in [200, 201]
-
-
-@pytest.mark.asyncio
-async def test_editor_can_create_agent(editor_client: TestClient):
+def test_editor_can_create_agent(editor_client: TestClient):
     """测试编辑用户可以创建Agent"""
     response = editor_client.post(
         "/api/v1/agents",
@@ -67,10 +61,7 @@ async def test_editor_can_create_agent(editor_client: TestClient):
         headers={"Authorization": "Bearer editor_token"}
     )
     assert response.status_code in [200, 201]
-
-
-@pytest.mark.asyncio
-async def test_viewer_cannot_modify(viewer_client: TestClient):
+def test_viewer_cannot_modify(viewer_client: TestClient):
     """测试查看者不能修改数据"""
     # 尝试创建Agent
     response = viewer_client.post(
@@ -79,10 +70,7 @@ async def test_viewer_cannot_modify(viewer_client: TestClient):
         headers={"Authorization": "Bearer viewer_token"}
     )
     assert response.status_code == 403
-
-
-@pytest.mark.asyncio
-async def test_workspace_isolation(client: TestClient, admin_user: User):
+def test_workspace_isolation(client: TestClient, admin_user: User):
     """测试工作空间隔离"""
     # 作为管理员，可以访问所有工作空间
     response = client.get("/api/v1/workspaces")

@@ -40,43 +40,31 @@ def viewer_user():
         role="viewer",
         is_active=True
     )
-
-
-@pytest.mark.asyncio
-async def test_admin_role_checker(admin_user):
+def test_admin_role_checker(admin_user):
     """测试管理员角色检查"""
     checker = RoleChecker(["admin", "editor"])
-    result = await checker(admin_user)
+    result = checker(admin_user)
     assert result.role == "admin"
-
-
-@pytest.mark.asyncio
-async def test_editor_role_checker(admin_user, editor_user):
+def test_editor_role_checker(admin_user, editor_user):
     """测试编辑者角色检查"""
     checker = RoleChecker(["admin", "editor"])
     
     # admin可以通过
-    result = await checker(admin_user)
+    result = checker(admin_user)
     assert result.role == "admin"
     
     # editor也可以通过
-    result = await checker(editor_user)
+    result = checker(editor_user)
     assert result.role == "editor"
-
-
-@pytest.mark.asyncio
-async def test_viewer_rejected(viewer_user):
+def test_viewer_rejected(viewer_user):
     """测试查看者被拒绝"""
     checker = RoleChecker(["admin", "editor"])
     
     with pytest.raises(HTTPException) as exc_info:
-        await checker(viewer_user)
+        checker(viewer_user)
     
     assert exc_info.value.status_code == 403
-
-
-@pytest.mark.asyncio
-async def test_workspace_permission_checker():
+def test_workspace_permission_checker():
     """测试工作空间权限检查"""
     checker = WorkspacePermissionChecker(
         required_roles=["editor", "admin"],
@@ -97,21 +85,15 @@ async def test_workspace_permission_checker():
     mock_db.execute.return_value = mock_result
     
     # Admin should pass even without member
-    result = await checker.check(mock_request, mock_user, mock_db)
+    result = checker.check(mock_request, mock_user, mock_db)
     assert result.role == "admin"
-
-
-@pytest.mark.asyncio
-async def test_permission_levels():
+def test_permission_levels():
     """测试权限级别定义"""
     assert PermissionLevels.reader is not None
     assert PermissionLevels.editor is not None
     assert PermissionLevels.admin is not None
     assert PermissionLevels.owner is not None
-
-
-@pytest.mark.asyncio
-async def test_workspace_member_check():
+def test_workspace_member_check():
     """测试工作空间成员检查"""
     checker = WorkspacePermissionChecker(
         required_roles=["viewer", "editor", "admin"]
@@ -130,12 +112,9 @@ async def test_workspace_member_check():
     mock_result.scalar_one_or_none.return_value = mock_member
     mock_db.execute.return_value = mock_result
     
-    result = await checker.check(mock_request, mock_user, mock_db)
+    result = checker.check(mock_request, mock_user, mock_db)
     assert result.id == "user-001"
-
-
-@pytest.mark.asyncio
-async def test_non_member_rejected():
+def test_non_member_rejected():
     """测试非成员被拒绝"""
     checker = WorkspacePermissionChecker(
         required_roles=["viewer", "editor", "admin"]
@@ -152,6 +131,6 @@ async def test_non_member_rejected():
     mock_db.execute.return_value = mock_result
     
     with pytest.raises(HTTPException) as exc_info:
-        await checker.check(mock_request, mock_user, mock_db)
+        checker.check(mock_request, mock_user, mock_db)
     
     assert exc_info.value.status_code == 403

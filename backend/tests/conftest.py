@@ -1,25 +1,18 @@
 """
-测试配置 - conftest.py 增强版
+测试配置 - conftest.py
 """
 import pytest
-import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.main import app
 from app.db.session import get_db
-from app.models.user import User
 
 
-# 测试数据库引擎
-TEST_DATABASE_URL = "postgresql+asyncpg://test:test@localhost/test_db"
-
-
-@pytest_asyncio.fixture
-async def db_session():
-    """创建测试数据库会话"""
-    # 在实际测试中，这里应该使用内存数据库或测试专用数据库
+@pytest.fixture
+def db_session():
+    """创建测试数据库会话（mock）"""
     mock_db = AsyncMock(spec=AsyncSession)
     mock_db.execute = AsyncMock()
     mock_db.commit = AsyncMock()
@@ -29,45 +22,51 @@ async def db_session():
     return mock_db
 
 
-@pytest_asyncio.fixture
-async def client(db_session):
-    """创建测试客户端"""
-    # 覆盖数据库依赖
+@pytest.fixture
+def client(db_session):
+    """创建测试客户端（不触发 lifespan，避免连接真实 DB）"""
     app.dependency_overrides[get_db] = lambda: db_session
-    
-    test_client = TestClient(app)
-    return test_client
+    c = TestClient(app, raise_server_exceptions=False)
+    yield c
+    app.dependency_overrides.clear()
 
 
-@pytest_asyncio.fixture
-async def admin_client(db_session):
+@pytest.fixture
+def admin_client(db_session):
     """创建管理员测试客户端"""
     app.dependency_overrides[get_db] = lambda: db_session
-    
-    test_client = TestClient(app)
-    # 添加管理员认证头
-    test_client.headers["Authorization"] = "Bearer admin_token"
-    return test_client
+    c = TestClient(app, raise_server_exceptions=False)
+    c.headers["Authorization"] = "Bearer admin_token"
+    yield c
+    app.dependency_overrides.clear()
 
 
-@pytest_asyncio.fixture
-async def editor_client(db_session):
+@pytest.fixture
+def editor_client(db_session):
     """创建编辑者测试客户端"""
     app.dependency_overrides[get_db] = lambda: db_session
-    
-    test_client = TestClient(app)
-    test_client.headers["Authorization"] = "Bearer editor_token"
-    return test_client
+    c = TestClient(app, raise_server_exceptions=False)
+    c.headers["Authorization"] = "Bearer editor_token"
+    yield c
+    app.dependency_overrides.clear()
 
 
-@pytest_asyncio.fixture
-async def viewer_client(db_session):
+@pytest.fixture
+def viewer_client(db_session):
     """创建查看者测试客户端"""
     app.dependency_overrides[get_db] = lambda: db_session
-    
-    test_client = TestClient(app)
-    test_client.headers["Authorization"] = "Bearer viewer_token"
-    return test_client
+    c = TestClient(app, raise_server_exceptions=False)
+    c.headers["Authorization"] = "Bearer viewer_token"
+    yield c
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def auth_headers():
+    """默认认证头（admin 角色）"""
+    from app.services.auth_service import create_access_token
+    token, _ = create_access_token(user_id="test-user-001", username="tester", role="admin")
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
@@ -84,7 +83,6 @@ def cache_manager():
     return CacheManager()
 
 
-# 通用测试数据
 @pytest.fixture
 def sample_agent():
     """样本Agent数据"""
