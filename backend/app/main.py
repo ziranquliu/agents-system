@@ -201,7 +201,9 @@ async def websocket_chat(websocket: WebSocket, conversation_id: str):
                     })
 
                 except Exception as e:
-                    await websocket.send_json({"type": "error", "content": str(e)})
+                    import logging
+                    logging.getLogger(__name__).warning("WebSocket LLM error: %s", e)
+                    await websocket.send_json({"type": "error", "content": "模型调用失败，请重试"})
 
             elif data.get("type") == "clear":
                 conversation_messages = []
@@ -211,7 +213,9 @@ async def websocket_chat(websocket: WebSocket, conversation_id: str):
         pass
     except Exception as e:
         try:
-            await websocket.send_json({"type": "error", "content": f"Connection error: {str(e)}"})
+            import logging
+            logging.getLogger(__name__).warning("WebSocket error: %s", e)
+            await websocket.send_json({"type": "error", "content": "连接异常，请重试"})
         except Exception:
             pass
 

@@ -66,7 +66,8 @@ async def send_email(to: str, subject: str, body: str,
             server.starttls()
         try:
             if cfg.smtp_user:
-                server.login(cfg.smtp_user, cfg.smtp_password or "")
+                from app.core.encryption import decrypt_secret
+                server.login(cfg.smtp_user, decrypt_secret(cfg.smtp_password) or "")
             server.sendmail(smtp_from, [t.strip() for t in to.split(",") if t.strip()], msg.as_string())
             logger.info("send_email: 已发送到 %s", to)
             return True

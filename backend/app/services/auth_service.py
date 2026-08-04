@@ -1,7 +1,9 @@
 """
 认证服务 - JWT 令牌、密码哈希、当前用户
-使用 bcrypt 直接处理密码哈希（避免 passlib 兼容性问题）
+使用 PBKDF2-SHA256 处理密码哈希（避免 passlib 兼容性问题）
+使用 hmac.compare_digest 防止 timing attack
 """
+import hmac
 import uuid
 import hashlib
 import secrets
@@ -33,7 +35,7 @@ def verify_password(plain_password: str, hashed: str) -> bool:
     try:
         salt, stored_hash = hashed.split('$')
         pwd_hash = hashlib.pbkdf2_hmac('sha256', plain_password.encode('utf-8'), salt.encode('utf-8'), 100000)
-        return pwd_hash.hex() == stored_hash
+        return hmac.compare_digest(pwd_hash.hex(), stored_hash)
     except (ValueError, AttributeError):
         return False
 

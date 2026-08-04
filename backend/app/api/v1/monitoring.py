@@ -258,8 +258,9 @@ async def update_notify_config(data: dict, db: AsyncSession = Depends(get_db)):
         cfg.smtp_port = int(data["smtp_port"])
     if "smtp_use_ssl" in data:
         cfg.smtp_use_ssl = bool(data["smtp_use_ssl"])
+    from app.core.encryption import encrypt_secret
     if "smtp_password" in data and data.get("smtp_password"):
-        cfg.smtp_password = data["smtp_password"]
+        cfg.smtp_password = encrypt_secret(data["smtp_password"])
 
     await db.commit()
     await db.refresh(cfg)
