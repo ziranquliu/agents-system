@@ -5,7 +5,6 @@
 import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, update
@@ -13,14 +12,6 @@ from sqlalchemy.orm import selectinload
 
 from app.models.agent import ModelConfigTemplate
 from app.models.model_template import ModelTemplateVersion, ModelTemplateBinding
-from app.schemas.model import (
-    ModelConfigCreate,
-    ModelConfigUpdate,
-)
-from app.schemas.model_version import (
-    ModelVersionResponse,
-    ModelBindingResponse,
-)
 
 
 class ModelVersionService:

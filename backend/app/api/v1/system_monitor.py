@@ -2,9 +2,7 @@
 系统监控 API - 健康检查/性能统计
 """
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db
 from app.services.auth_service import get_current_user
 from app.services import system_monitor_service
 

@@ -1,7 +1,6 @@
 """
 多智能体协作 API - 协作 CRUD / 启动 / 任务管理
 """
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field

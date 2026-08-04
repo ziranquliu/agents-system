@@ -3,26 +3,19 @@
 """
 import json
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.services.auth_service import get_current_user
 from app.models.ops import (
-    AgentDeployment, AgentDeploymentStatus,
-    ScalingPolicy, ScalingEvent, ScalingMetricType, ScalingDirection,
-    LogEntry, LogCollectionConfig, LogLevel, LogSourceType,
-    MaintenanceTask, MaintenanceExecution, MaintenanceType,
-    SelfHealRecord, HealRule, HealLevel, HealStatus,
-    OpsReport, ReportType,
+    ReportType,
 )
 from app.services.ops_service import (
     DeploymentService, AutoScalingService, LogService,
     MaintenanceService, SelfHealService, ReportService,
-    _safe_json_loads,
 )
 
 router = APIRouter(prefix="/api/v1/ops", tags=["智能体自动化运维"], dependencies=[Depends(get_current_user)])

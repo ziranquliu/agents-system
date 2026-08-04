@@ -1,6 +1,6 @@
 from typing import Optional
 from datetime import datetime, date
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession

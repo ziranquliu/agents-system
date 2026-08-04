@@ -4,11 +4,9 @@
 异常行为检测规则与告警、审计配置（保留期/SIEM/脱敏）
 """
 import uuid
-from datetime import datetime, date
-from typing import Optional
+from datetime import datetime
 
-from sqlalchemy import Column, String, Text, Integer, Float, Boolean, DateTime, Date
-from sqlalchemy.sql import func
+from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, Date
 
 from app.db.session import Base
 

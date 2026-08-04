@@ -1,11 +1,8 @@
 """
 系统监控增强服务 - 系统健康/性能指标
 """
-import json
-import time
 from collections import defaultdict
 from datetime import datetime
-from typing import Optional
 
 
 # 性能指标存储

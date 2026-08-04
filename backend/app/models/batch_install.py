@@ -2,9 +2,8 @@
 批量 Skill 分配与安装模型 - 依赖预检、安装队列、报告
 """
 import uuid
-from datetime import datetime
 
-from sqlalchemy import Column, String, Text, DateTime, Integer, Float, Boolean
+from sqlalchemy import Column, String, Text, DateTime, Integer
 from sqlalchemy.sql import func
 
 from app.db.session import Base

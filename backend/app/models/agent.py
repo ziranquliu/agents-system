@@ -2,8 +2,6 @@
 Agent 模型 - 智能体定义和生命周期管理
 """
 import uuid
-from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Column, String, Text, DateTime, Boolean, Integer, Float
 from sqlalchemy.sql import func

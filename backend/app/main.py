@@ -11,7 +11,7 @@ if sys.platform == 'win32':
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware

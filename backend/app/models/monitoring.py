@@ -2,7 +2,6 @@
 多智能体监控看板模型 — 指标 / 告警 / 面板
 """
 import uuid
-from datetime import datetime
 
 from sqlalchemy import Column, String, Text, DateTime, Integer, Float, Boolean
 from sqlalchemy.sql import func

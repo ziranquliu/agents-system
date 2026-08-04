@@ -4,7 +4,6 @@
 """
 import hashlib
 import json
-import os
 import secrets
 import uuid
 from datetime import datetime, timedelta
@@ -232,7 +231,7 @@ class BackupEnhancedService:
         data = {"agent_id": agent_id, "collected_at": datetime.utcnow().isoformat(), "tables": {}}
 
         from app.models.agent import Agent
-        from app.models.conversation import Conversation, Message
+        from app.models.conversation import Conversation
         from app.models.memory import AgentMemory
 
         if scope in (BackupScope.ALL, BackupScope.CONFIG):

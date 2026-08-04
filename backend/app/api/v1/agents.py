@@ -1,7 +1,7 @@
 """
 Agent 管理 API - 完整的 CRUD + 状态管理
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db

@@ -2,8 +2,6 @@
 用户与角色模型
 """
 import uuid
-from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Column, String, Boolean, DateTime, Text
 from sqlalchemy.sql import func

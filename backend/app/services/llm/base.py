@@ -2,7 +2,7 @@
 LLM 适配器抽象基类
 """
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator, Optional, Any
+from typing import AsyncGenerator, Optional
 
 
 class ChatMessage:

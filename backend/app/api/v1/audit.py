@@ -3,8 +3,8 @@
 覆盖：审计日志写入/查询/校验、CSV 导出、SIEM 输出、异常行为检测、规则管理、配置管理
 """
 import json
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
@@ -15,7 +15,7 @@ from app.db.session import get_db
 from app.services.auth_service import get_current_user
 from app.models.audit import (
     AuditLog, AuditArchive, AuditRule, AuditAlert, AuditConfig,
-    AuditCategory, AuditResult, AnomalyType, AlertSeverity,
+    AuditCategory, AuditResult,
 )
 from app.services.audit_service import (
     AuditService, HashChainService, SIEMExporter, AnomalyDetector,

@@ -2,9 +2,11 @@
 模型配置模板 API
 """
 import json
+import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 
 from app.db.session import get_db
 from app.schemas.model import (
@@ -18,6 +20,8 @@ from app.services import model_service
 from app.core.encryption import decrypt_secret
 from app.services.model_binding_service import trigger_auto_sync
 from app.api.v1.auth import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["模型配置"])
 
@@ -118,6 +122,8 @@ async def update_model(
     
     # 更新后自动触发绑定Agent同步
     sync_result = await trigger_auto_sync(db, template_id, current_user.id)
+    if not sync_result.get("success"):
+        logger.warning("模型配置更新后同步失败: %s", sync_result)
     
     # 刷新响应数据
     return _template_to_response(template)

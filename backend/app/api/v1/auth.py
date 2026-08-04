@@ -8,12 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.core.config import settings
 from app.models.user import User, OperationLog
 from app.schemas.auth import UserCreate, UserLogin, UserResponse, TokenResponse
 from app.services.auth_service import (
     hash_password,
-    verify_password,
     create_access_token,
     get_current_user,
     authenticate_user,

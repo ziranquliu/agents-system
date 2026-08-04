@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import select, func as sa_func, and_, delete as sa_delete
+from sqlalchemy import select, func as sa_func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.skill import MCPServer

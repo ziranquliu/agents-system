@@ -2,9 +2,8 @@
 Skill 跨 Agent 复用 - 直接引用/复制/模板三种模式
 """
 import uuid
-from datetime import datetime
 
-from sqlalchemy import Column, String, Text, DateTime, Boolean, Integer
+from sqlalchemy import Column, String, DateTime, Integer
 from sqlalchemy.sql import func
 
 from app.db.session import Base

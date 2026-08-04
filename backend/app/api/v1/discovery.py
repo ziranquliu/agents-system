@@ -1,7 +1,7 @@
 """
 本地 Agent 发现与注册 API
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 
 from app.db.session import get_db
 from app.models.user import User

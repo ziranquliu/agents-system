@@ -11,10 +11,9 @@
 每个任务使用独立的 DB session（async_session_factory），
 避免与 FastAPI 请求生命周期耦合，故障不中断其他任务。
 """
-import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -57,8 +56,6 @@ async def _run_maintenance():
     """定期维护任务（4.22.4）— 动态读取启用的维护任务并执行"""
     try:
         from app.services.ops_service import MaintenanceService
-        from app.models.ops import MaintenanceType
-        from app.models.ops import MaintenanceTask as MaintTask
 
         async with async_session_factory() as session:
             tasks, _ = await MaintenanceService.list_tasks(session, enabled_only=True)
@@ -96,8 +93,6 @@ async def _execute_maintenance_task(session, task):
             cleaned = 0
         elif task_type == MaintenanceType.TEMP_FILE_CLEANUP:
             # 清理备份目录中的临时文件（tmp_* 前缀）
-            import shutil
-            from pathlib import Path
             from app.services.backup_enhanced_service import _BACKUP_DIR
             if _BACKUP_DIR and _BACKUP_DIR.exists():
                 for f in _BACKUP_DIR.glob("tmp_*"):

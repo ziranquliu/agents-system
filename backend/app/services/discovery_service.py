@@ -2,16 +2,12 @@
 本地 AI 服务发现服务
 扫描 Ollama、OpenAI-compatible 端点等本地运行的 AI 服务
 """
-import json
 import uuid
-from typing import Optional
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
-from app.models.agent import Agent, ModelConfigTemplate
-from app.schemas.agent import AgentCreate
+from app.models.agent import Agent
 
 
 # 默认扫描的目标

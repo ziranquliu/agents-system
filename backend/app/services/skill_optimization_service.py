@@ -1,12 +1,10 @@
 """
 Skill 使用优化服务 - 缓存/DAG优化/性能监控
 """
-import json
-import time
 from collections import OrderedDict
 from typing import Any, Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # 简单的 LRU 缓存（进程内）

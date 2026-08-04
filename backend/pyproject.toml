@@ -2,3 +2,12 @@
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E712"]  # SQLAlchemy .where(col == True) 是合法 ORM 用法
+

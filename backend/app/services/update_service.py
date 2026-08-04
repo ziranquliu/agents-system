@@ -7,11 +7,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import async_session_factory
-from app.models.scanner import ComponentScan, ComponentScanItem
+from app.models.scanner import ComponentScan
 
 _DATA_DIR = Path(__file__).parent.parent / "data"
 

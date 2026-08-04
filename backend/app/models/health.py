@@ -4,10 +4,8 @@
 """
 import uuid
 from datetime import datetime
-from typing import Optional
 
-from sqlalchemy import Column, String, Text, Integer, Float, Boolean, DateTime, JSON
-from sqlalchemy.sql import func
+from sqlalchemy import Column, String, Text, Integer, Float, Boolean, DateTime
 
 from app.db.session import Base
 

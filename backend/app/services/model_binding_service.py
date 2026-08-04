@@ -5,7 +5,7 @@ import json
 from typing import Optional
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.models.agent import ModelConfigTemplate, Agent
 from app.models.model_template import ModelTemplateVersion, ModelTemplateBinding

@@ -2,9 +2,8 @@
 模型配置模板增强 - 版本管理 + 绑定复用 + 灰度同步
 """
 import uuid
-from datetime import datetime
 
-from sqlalchemy import Column, String, Text, DateTime, Integer, Float, Boolean, Enum as SAEnum
+from sqlalchemy import Column, String, Text, DateTime, Integer
 from sqlalchemy.sql import func
 
 from app.db.session import Base

@@ -4,10 +4,9 @@
 """
 import json
 import logging
-import uuid
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
-from sqlalchemy import select, func, and_, or_, desc, asc
+from sqlalchemy import select, func, and_, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ops import (

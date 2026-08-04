@@ -3,8 +3,7 @@
 """
 import uuid
 
-from sqlalchemy import Column, String, Text, DateTime, Boolean, ForeignKey, Integer
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, DateTime, Boolean, Integer
 from sqlalchemy.sql import func
 
 from app.db.session import Base

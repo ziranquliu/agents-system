@@ -1,12 +1,10 @@
 """
 知识库服务 - CRUD/文档管理/检索
 """
-import json
 import logging
 import uuid
 from typing import Optional
 
-from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy import select, func, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 

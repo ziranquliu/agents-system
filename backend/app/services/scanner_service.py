@@ -3,6 +3,7 @@
 """
 import asyncio
 import json
+import logging
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -10,6 +11,8 @@ from typing import Optional
 import aiohttp
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.db.session import async_session_factory
 from app.models.scanner import ComponentScan, ComponentScanItem, ScannerAlert

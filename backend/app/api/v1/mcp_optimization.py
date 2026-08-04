@@ -2,7 +2,6 @@
 MCP 使用优化 API - 熔断器/连接池/负载均衡/安全
 """
 from fastapi import APIRouter, Body, Depends, Query
-from pydantic import BaseModel
 
 from app.services import mcp_optimization_service
 from app.services.auth_service import get_current_user

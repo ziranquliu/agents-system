@@ -2,7 +2,6 @@
 记忆管理模型 - 三层记忆体系（短期/长期/共享）
 """
 import uuid
-from datetime import datetime
 
 from sqlalchemy import Column, String, Text, DateTime, Integer, Float, Boolean
 from sqlalchemy.sql import func

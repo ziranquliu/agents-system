@@ -37,7 +37,7 @@ async def create_backup(db: AsyncSession, created_by: str = "system", notes: Opt
     from app.models.skill import Skill, MCPServer
     from app.models.workspace import Workspace
     from app.models.task import Task
-    from app.models.knowledge import KnowledgeBase, KnowledgeDocument
+    from app.models.knowledge import KnowledgeBase
 
     tables = {
         "agents": Agent,

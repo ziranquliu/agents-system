@@ -6,7 +6,6 @@
 - send_email(to, subject, body): 通过配置的 SMTP 发送邮件
 - notify(method, target, title, content): 统一入口，按方式分发
 """
-import json
 import logging
 import smtplib
 from email.header import Header

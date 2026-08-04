@@ -3,18 +3,16 @@
 """
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, and_
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.services.auth_service import get_current_user
 from app.models.health import (
-    HealthCheckRun, HealthSnapshot, HealthScoreWeight, AgentHealthConfig,
-    HealthTrendPoint, HealthEvent,
-    HealthLevel, CheckStatus, AgentHealthStatus,
+    HealthScoreWeight, HealthLevel, AgentHealthStatus,
 )
 from app.services.health_service import (
     HealthCheckExecutor, HealthScoringService, HealthPanelService,

@@ -1,15 +1,12 @@
 """
 MCP 使用优化服务 - 连接池/熔断/负载均衡/安全
 """
-import json
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 # ---- 熔断器 ----

@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit import (
     AuditLog, AuditArchive, AuditRule, AuditAlert, AuditConfig,
-    AuditCategory, AuditResult, AnomalyType, AlertSeverity,
+    AuditResult, AnomalyType,
 )
 
 # 禁止修改/删除审计日志（追加写入保证）

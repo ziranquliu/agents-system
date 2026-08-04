@@ -3,18 +3,16 @@
 提供版本历史、回滚、绑定同步等功能
 """
 from datetime import datetime
-from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, and_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.api.v1.auth import get_current_user
-from app.models.agent import ModelConfigTemplate
 from app.models.model_template import ModelTemplateVersion, ModelTemplateBinding
 from app.schemas.model_version import (
     ModelVersionResponse,
-    ModelBindingResponse,
     RollbackRequest,
     SyncResult,
 )

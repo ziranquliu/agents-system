@@ -7,7 +7,7 @@ import functools
 from typing import Optional
 
 from jose import jwt  # python-jose
-from fastapi import Request
+from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from redis import Redis

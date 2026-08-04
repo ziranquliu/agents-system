@@ -12,6 +12,7 @@ from typing import Optional
 
 from app.services.llm import create_adapter
 from app.core.encryption import decrypt_secret
+from app.models.agent import ModelConfigTemplate
 
 logger = logging.getLogger("embedding")
 

@@ -1,54 +1,33 @@
+"""
+Base module with common dependencies, mixins, and utilities.
+
+Re-exports shared dependencies for convenience; provides DatabaseMixin,
+PaginationMixin, TimestampMixin, response helpers, and decorators.
+"""
+import asyncio
+import logging
+import re
+import time
+from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable, Optional, TypeVar
-from fastapi import Depends, HTTPException, status
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
+
 from app.db.session import get_db as _get_db
-from app.models.user import User
 from app.core.security import get_current_user as _get_current_user
-    from app.core.base import get_db, get_current_user, DatabaseMixin, PaginationMixin
-        from datetime import datetime, timezone
-        from datetime import datetime, timezone
-    import logging
-    import asyncio
-    import time
-    import logging
-    import re
-    import re
 
-"""
-Base module with common dependencies and mixins.
-"""
-        return datetime.now(timezone.utc)
-    logger = logging.getLogger(__name__)
-    if asyncio.iscoroutinefunction(func):
-        return async_wrapper
-    return wrapper
-    logger = logging.getLogger(__name__)
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return bool(re.match(pattern, email))
-    pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-    return bool(re.match(pattern, uuid_str.lower()))
-
-This module provides shared dependencies, mixins, and utility classes
-to reduce code duplication across the application.
-
-Usage:
-
-
-
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Re-export common dependencies for convenience
 # ============================================================================
 
-# Database dependency
 get_db = _get_db
-
-# Authentication dependency
 get_current_user = _get_current_user
 
-# ORM loading strategies
+# ORM loading strategies (alias for convenience)
 select_inload = selectinload
 joined_inload = joinedload
 
@@ -62,148 +41,85 @@ T = TypeVar("T")
 # Mixin Classes
 # ============================================================================
 
+
 class DatabaseMixin:
-    """
-    Mixin class providing common database operations.
-    
-    Usage:
-        class MyService(DatabaseMixin):
-            async def __init__(self, db: AsyncSession):
-                self.db = db
-    """
-    
+    """Mixin providing common async database operations."""
+
     def __init__(self, db: AsyncSession):
         self.db = db
-    
+
     async def commit(self) -> None:
-        """Commit the current transaction."""
         await self.db.commit()
-    
+
     async def rollback(self) -> None:
-        """Rollback the current transaction."""
         await self.db.rollback()
-    
+
     async def flush(self) -> None:
-        """Flush pending changes."""
         await self.db.flush()
-    
+
     async def refresh(self, instance: Any) -> None:
-        """Refresh an instance from the database."""
         await self.db.refresh(instance)
 
 
 class PaginationMixin:
-    """
-    Mixin class providing pagination utilities.
-    
-    Usage:
-        class MyService(PaginationMixin):
-            def paginate(self, items, page, page_size):
-                return self.create_pagination(items, page, page_size)
-    """
-    
+    """Mixin providing pagination utilities."""
+
     @staticmethod
     def create_pagination(
         items: list,
         page: int,
         page_size: int,
-        total: Optional[int] = None
+        total: Optional[int] = None,
     ) -> dict:
-        """
-        Create pagination response.
-        
-        Args:
-            items: List of items to paginate
-            page: Page number (1-indexed)
-            page_size: Number of items per page
-            total: Total number of items (optional, will be calculated if not provided)
-        
-        Returns:
-            Dictionary with pagination metadata
-        """
         if total is None:
             total = len(items)
-        
         start = (page - 1) * page_size
         end = start + page_size
         paginated_items = items[start:end]
-        
+        total_pages = (total + page_size - 1) // page_size
+
         return {
             "items": paginated_items,
             "total": total,
             "page": page,
             "page_size": page_size,
-            "total_pages": (total + page_size - 1) // page_size,
-            "has_next": page < (total + page_size - 1) // page_size,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
             "has_prev": page > 1,
         }
 
 
 class TimestampMixin:
-    """
-    Mixin class providing timestamp utilities.
-    
-    Usage:
-        
-        class MyModel:
-            created_at = Column(DateTime, default=datetime.now(timezone.utc))
-            updated_at = Column(DateTime, onupdate=datetime.now(timezone.utc))
-    """
-    
+    """Mixin providing UTC timestamp utilities."""
+
     @staticmethod
-    def now_utc():
-        """Get current UTC datetime."""
+    def now_utc() -> datetime:
+        return datetime.now(timezone.utc)
 
 
 # ============================================================================
 # Response Helpers
 # ============================================================================
 
+
 def success_response(data: Any = None, message: str = "Success") -> dict:
-    """
-    Create a standardized success response.
-    
-    Args:
-        data: Response data
-        message: Success message
-    
-    Returns:
-        Dictionary with success response structure
-    """
-    return {
-        "success": True,
-        "message": message,
-        "data": data,
-    }
+    return {"success": True, "message": message, "data": data}
 
 
 def error_response(
     message: str,
     code: Optional[str] = None,
-    details: Optional[dict] = None
+    details: Optional[dict] = None,
 ) -> dict:
-    """
-    Create a standardized error response.
-    
-    Args:
-        message: Error message
-        code: Error code (optional)
-        details: Error details (optional)
-    
-    Returns:
-        Dictionary with error response structure
-    """
-    response = {
+    response: dict[str, Any] = {
         "success": False,
         "message": message,
         "data": None,
     }
-    
     if code:
         response["code"] = code
     if details:
         response["details"] = details
-    
     return response
 
 
@@ -211,20 +127,9 @@ def pagination_response(
     items: list,
     page: int,
     page_size: int,
-    total: int
+    total: int,
 ) -> dict:
-    """
-    Create a standardized pagination response.
-    
-    Args:
-        items: List of items
-        page: Current page number
-        page_size: Items per page
-        total: Total number of items
-    
-    Returns:
-        Dictionary with pagination response structure
-    """
+    total_pages = (total + page_size - 1) // page_size
     return {
         "success": True,
         "message": "Success",
@@ -234,10 +139,10 @@ def pagination_response(
                 "page": page,
                 "page_size": page_size,
                 "total": total,
-                "total_pages": (total + page_size - 1) // page_size,
-                "has_next": page < (total + page_size - 1) // page_size,
+                "total_pages": total_pages,
+                "has_next": page < total_pages,
                 "has_prev": page > 1,
-            }
+            },
         },
     }
 
@@ -246,46 +151,32 @@ def pagination_response(
 # Decorators
 # ============================================================================
 
+
 def log_execution(func: Callable) -> Callable:
-    """
-    Decorator to log function execution.
-    
-    Usage:
-        @log_execution
-        async def my_function():
-            pass
-    """
-    
+    """Decorator to log function entry and exit."""
+
     @wraps(func)
     def wrapper(*args, **kwargs):
-        logger.debug(f"Calling {func.__name__}")
+        logger.debug("Calling %s", func.__name__)
         result = func(*args, **kwargs)
-        logger.debug(f"Completed {func.__name__}")
+        logger.debug("Completed %s", func.__name__)
         return result
-    
+
     @wraps(func)
     async def async_wrapper(*args, **kwargs):
-        logger.debug(f"Calling async {func.__name__}")
+        logger.debug("Calling async %s", func.__name__)
         result = await func(*args, **kwargs)
-        logger.debug(f"Completed async {func.__name__}")
+        logger.debug("Completed async %s", func.__name__)
         return result
-    
+
+    if asyncio.iscoroutinefunction(func):
+        return async_wrapper
+    return wrapper
 
 
 def retry(max_attempts: int = 3, delay: float = 1.0):
-    """
-    Decorator to retry function calls on failure.
-    
-    Args:
-        max_attempts: Maximum number of retry attempts
-        delay: Delay between retries in seconds
-    
-    Usage:
-        @retry(max_attempts=3, delay=1.0)
-        async def my_function():
-            pass
-    """
-    
+    """Decorator to retry function calls on failure."""
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -296,11 +187,16 @@ def retry(max_attempts: int = 3, delay: float = 1.0):
                     if attempt == max_attempts - 1:
                         raise
                     logger.warning(
-                        f"Attempt {attempt + 1}/{max_attempts} failed for {func.__name__}: {e}"
+                        "Attempt %d/%d failed for %s: %s",
+                        attempt + 1,
+                        max_attempts,
+                        func.__name__,
+                        e,
                     )
                     time.sleep(delay)
+
         return wrapper
-    
+
     return decorator
 
 
@@ -308,48 +204,25 @@ def retry(max_attempts: int = 3, delay: float = 1.0):
 # Validation Helpers
 # ============================================================================
 
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}\-[0-9a-f]{4}\-[0-9a-f]{4}\-[0-9a-f]{4}\-[0-9a-f]{12}$"
+)
+
+
 def validate_email(email: str) -> bool:
-    """
-    Validate email format.
-    
-    Args:
-        email: Email address to validate
-    
-    Returns:
-        True if valid, False otherwise
-    """
+    """Validate email format."""
+    return bool(_EMAIL_RE.match(email))
 
 
 def validate_uuid(uuid_str: str) -> bool:
-    """
-    Validate UUID format.
-    
-    Args:
-        uuid_str: UUID string to validate
-    
-    Returns:
-        True if valid, False otherwise
-    """
+    """Validate UUID format (case-insensitive)."""
+    return bool(_UUID_RE.match(uuid_str.lower()))
 
 
 def sanitize_string(text: str, max_length: int = 1000) -> str:
-    """
-    Sanitize string input.
-    
-    Args:
-        text: Input text
-        max_length: Maximum length
-    
-    Returns:
-        Sanitized text
-    """
+    """Remove HTML tags and trim text to max_length."""
     if not text:
         return ""
-    
-    # Remove HTML tags
-    text = re.sub(r'<[^>]+>', '', text)
-    
-    # Trim and limit length
-    text = text.strip()[:max_length]
-    
-    return text
+    text = re.sub(r"<[^>]+>", "", text)
+    return text.strip()[:max_length]

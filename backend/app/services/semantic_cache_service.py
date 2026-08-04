@@ -5,10 +5,9 @@ Semantic Cache 服务（A8）— 语义缓存
 - 缓存键: query_embedding；存 answer + 时间戳；可配置阈值和 TTL
 - 未命中走 LLM 并写入缓存（由调用方在聊天主流程中处理）
 """
-import json
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import select

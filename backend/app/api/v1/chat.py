@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,8 +16,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.models.semantic_cache import DEFAULT_SIMILARITY_THRESHOLD, DEFAULT_TTL_SECONDS
 from app.services.auth_service import get_current_user
-from app.services.llm import create_adapter, list_supported_providers
-from app.services.model_service import get_template
+from app.services.llm import create_adapter
 from app.services.semantic_cache_service import semantic_cache_service
 
 logger = logging.getLogger("chat")

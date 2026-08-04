@@ -10,7 +10,6 @@ from app.models.user import User
 from app.services.auth_service import get_current_user
 from app.services import knowledge_service
 from app.services.semantic_cache_service import semantic_cache_service
-from app.services.embedding_service import get_embeddings
 
 router = APIRouter(tags=["知识库"], dependencies=[Depends(get_current_user)])
 

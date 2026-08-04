@@ -2,14 +2,13 @@
 RBAC权限中间件
 基于角色的访问控制，支持工作空间级别权限隔离
 """
-from functools import wraps
-from typing import List, Optional, Callable
+from typing import List
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.db.session import get_db
-from app.models.user import User, Role
+from app.models.user import User
 from app.models.workspace import WorkspaceMember
 from app.api.v1.auth import get_current_user
 
