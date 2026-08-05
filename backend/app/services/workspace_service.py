@@ -89,7 +89,7 @@ async def list_workspaces(
 
     query = select(Workspace)
 
-    if accessible_ids is not None:
+    if user_id and accessible_ids:
         query = query.where(Workspace.id.in_(accessible_ids))
 
     if search:

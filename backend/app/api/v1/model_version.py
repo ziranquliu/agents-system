@@ -2,11 +2,14 @@
 模型模板版本管理 API
 提供版本历史、回滚、绑定同步等功能
 """
+import logging
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, and_, update
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.db.session import get_db
 from app.api.v1.auth import get_current_user
@@ -331,14 +334,15 @@ async def trigger_sync(
             })
             
         except Exception as e:
+            logger.warning("Gray sync failed for agent %s: %s", binding.agent_id, e)
             binding.binding_status = "failed"
             binding.gray_status = "failed"
-            binding.gray_error = str(e)
+            binding.gray_error = "灰度同步失败"
             failed_count += 1
             sync_results.append({
                 "agent_id": binding.agent_id,
                 "status": "failed",
-                "error": str(e)
+                "error": "灰度同步失败"
             })
     
     await db.commit()

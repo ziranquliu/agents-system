@@ -75,7 +75,8 @@ async def chat_completions(
             adapter_config,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.warning("Chat adapter error: %s", e)
+        raise HTTPException(status_code=400, detail="模型配置无效")
 
     messages_dict = [m.model_dump() for m in data.messages]
 
@@ -134,7 +135,8 @@ async def chat_completions(
             max_tokens=data.max_tokens,
         )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Model request failed: {str(e)}")
+        logger.warning("Model request failed: %s", e)
+        raise HTTPException(status_code=502, detail="模型调用失败，请稍后重试")
 
     # 写入语义缓存（尽力而为：失败不阻塞响应）
     if query_text:
@@ -223,7 +225,8 @@ async def _stream_response(adapter, messages: list[dict], data: ChatCompletionRe
             yield f"data: {json.dumps({'id': resp_id, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            logger.warning("Stream error: %s", e)
+            yield f"data: {json.dumps({'error': '模型调用失败，请稍后重试'})}\n\n"
 
     return StreamingResponse(
         generate(),
@@ -257,7 +260,8 @@ async def create_embeddings(
     except NotImplementedError:
         raise HTTPException(400, "Embeddings not supported by this provider")
     except Exception as e:
-        raise HTTPException(502, f"Embeddings request failed: {str(e)}")
+        logger.warning("Embeddings request failed: %s", e)
+        raise HTTPException(502, "向量化请求失败，请稍后重试")
 
     return {
         "model": model,
