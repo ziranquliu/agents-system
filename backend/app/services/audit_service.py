@@ -506,7 +506,10 @@ class AnomalyDetector:
         now = datetime.utcnow()
 
         for rule in rules:
-            params = json.loads(rule.params) if rule.params else {}
+            try:
+                params = json.loads(rule.params) if rule.params else {}
+            except (json.JSONDecodeError, TypeError):
+                params = {}
             if rule.rule_type == AnomalyType.OFF_HOURS:
                 alerts += await AnomalyDetector._detect_off_hours(session, rule, params, now)
             elif rule.rule_type == AnomalyType.HIGH_FREQ_FAILURE:

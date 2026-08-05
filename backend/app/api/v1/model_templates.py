@@ -14,6 +14,16 @@ from app.services.model_template_service import ModelTemplateService
 router = APIRouter(prefix="/api/v1/model-templates", tags=["模型配置模板"], dependencies=[Depends(get_current_user)])
 
 
+def _safe_json(s, default=None):
+    """安全解析 JSON 字符串，失败返回默认值"""
+    if not s:
+        return default or {}
+    try:
+        return json.loads(s) if isinstance(s, str) else s
+    except (json.JSONDecodeError, TypeError):
+        return default or {}
+
+
 def _version_to_dict(v) -> dict:
     return {
         "id": v.id,
@@ -23,7 +33,7 @@ def _version_to_dict(v) -> dict:
         "name": v.name,
         "provider": v.provider,
         "model": v.model,
-        "config": json.loads(v.config) if v.config else {},
+        "config": _safe_json(v.config),
         "description": v.description,
         "created_by": v.created_by,
         "created_at": v.created_at.isoformat() if v.created_at else None,
@@ -35,7 +45,7 @@ def _binding_to_dict(b) -> dict:
         "id": b.id,
         "template_id": b.template_id,
         "agent_id": b.agent_id,
-        "override_config": json.loads(b.override_config) if b.override_config else {},
+        "override_config": _safe_json(b.override_config),
         "override_model": b.override_model,
         "override_provider": b.override_provider,
         "sync_mode": b.sync_mode,

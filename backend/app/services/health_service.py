@@ -96,7 +96,10 @@ class HealthCheckExecutor:
         # Skill 检查（模拟注册表检测）
         skills = config.l3_skills or []
         if isinstance(skills, str):
-            skills = json.loads(skills or "[]")
+            try:
+                skills = json.loads(skills or "[]")
+            except (json.JSONDecodeError, TypeError):
+                skills = []
         for skill in skills:
             ok = random.random() > 0.02  # 模拟 98% 可用率
             item = {"name": skill, "status": "pass" if ok else "fail"}
@@ -107,7 +110,10 @@ class HealthCheckExecutor:
         # MCP 检查
         mcp_servers = config.l3_mcp_servers or []
         if isinstance(mcp_servers, str):
-            mcp_servers = json.loads(mcp_servers or "[]")
+            try:
+                mcp_servers = json.loads(mcp_servers or "[]")
+            except (json.JSONDecodeError, TypeError):
+                mcp_servers = []
         for mcp in mcp_servers:
             ok = random.random() > 0.02
             item = {"name": mcp, "status": "pass" if ok else "fail"}

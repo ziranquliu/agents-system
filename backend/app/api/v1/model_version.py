@@ -300,8 +300,14 @@ async def trigger_sync(
             
             # 合并配置
             import json
-            template_config = json.loads(template.config or "{}")
-            override_config = json.loads(binding.override_config or "{}")
+            try:
+                template_config = json.loads(template.config or "{}")
+            except (json.JSONDecodeError, TypeError):
+                template_config = {}
+            try:
+                override_config = json.loads(binding.override_config or "{}")
+            except (json.JSONDecodeError, TypeError):
+                override_config = {}
             merged_config = {**template_config, **override_config}
             
             # 更新Agent

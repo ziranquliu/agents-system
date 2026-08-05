@@ -41,14 +41,34 @@ def _alert_record_to_dict(a):
     }
 
 
+def _safe_json_list(s):
+    """安全解析 JSON 列表"""
+    if not s:
+        return []
+    try:
+        return json.loads(s) if isinstance(s, str) else s
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def _safe_json_dict(s):
+    """安全解析 JSON 字典"""
+    if not s:
+        return {}
+    try:
+        return json.loads(s) if isinstance(s, str) else s
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
 def _panel_to_dict(p):
     return {
         "id": p.id, "title": p.title, "chart_type": p.chart_type,
-        "metric_names": json.loads(p.metric_names) if p.metric_names else [],
-        "agent_ids": json.loads(p.agent_ids) if p.agent_ids else [],
+        "metric_names": _safe_json_list(p.metric_names),
+        "agent_ids": _safe_json_list(p.agent_ids),
         "position_x": p.position_x, "position_y": p.position_y,
         "width": p.width, "height": p.height,
-        "config": json.loads(p.config) if p.config else {},
+        "config": _safe_json_dict(p.config),
         "enabled": p.enabled, "created_by": p.created_by,
     }
 

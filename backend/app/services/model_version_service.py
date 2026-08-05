@@ -14,6 +14,15 @@ from app.models.agent import ModelConfigTemplate
 from app.models.model_template import ModelTemplateVersion, ModelTemplateBinding
 
 
+def _safe_json(s, default=None):
+    if not s:
+        return default or {}
+    try:
+        return json.loads(s) if isinstance(s, str) else s
+    except (json.JSONDecodeError, TypeError):
+        return default or {}
+
+
 class ModelVersionService:
     """模型模板版本管理服务"""
     
@@ -220,8 +229,8 @@ class ModelVersionService:
                 return {"status": "failed", "error": "Agent不存在"}
             
             # 应用覆盖参数
-            override_config = json.loads(binding.override_config or "{}")
-            template_config = json.loads(template.config or "{}")
+            override_config = _safe_json(binding.override_config)
+            template_config = _safe_json(template.config)
             
             # 合并配置：override优先
             merged_config = {**template_config, **override_config}

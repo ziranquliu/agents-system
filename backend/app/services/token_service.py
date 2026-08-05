@@ -14,6 +14,17 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+
+def _safe_json(s, default=None):
+    """安全解析 JSON 字符串"""
+    if not s:
+        return default or {}
+    try:
+        return json.loads(s) if isinstance(s, str) else s
+    except (json.JSONDecodeError, TypeError):
+        return default or {}
+
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -322,7 +333,7 @@ class TokenService:
             "alert_threshold": budget.alert_threshold,
             "block_when_exceeded": budget.block_when_exceeded,
             "cascade_enabled": budget.cascade_enabled,
-            "cascade_chain": json.loads(budget.cascade_chain) if budget.cascade_chain else DEFAULT_CASCADE_CHAIN,
+            "cascade_chain": _safe_json(budget.cascade_chain, DEFAULT_CASCADE_CHAIN),
             **check,
         }
 
@@ -490,7 +501,7 @@ class OptimizationService:
                 "max_input_tokens": 8000,
                 "enabled": True,
             }
-        chain = json.loads(rule.fallback_chain) if rule.fallback_chain else DEFAULT_CASCADE_CHAIN[1:]
+        chain = _safe_json(rule.fallback_chain, DEFAULT_CASCADE_CHAIN[1:])
         return {
             "task_type": rule.task_type,
             "primary_model": rule.primary_model,
@@ -523,7 +534,7 @@ class OptimizationService:
         rules = (await session.execute(select(ModelCascadeRule))).scalars().all()
         result = []
         for r in rules:
-            chain = json.loads(r.fallback_chain) if r.fallback_chain else DEFAULT_CASCADE_CHAIN[1:]
+            chain = _safe_json(r.fallback_chain, DEFAULT_CASCADE_CHAIN[1:])
             result.append({
                 "task_type": r.task_type,
                 "primary_model": r.primary_model,

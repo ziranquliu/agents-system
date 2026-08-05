@@ -13,6 +13,14 @@ from app.models.agent import ModelConfigTemplate
 from app.models.model_template import ModelTemplateVersion, ModelTemplateBinding
 
 
+def _safe_json(s, default=None):
+    if not s:
+        return default or {}
+    try:
+        return json.loads(s) if isinstance(s, str) else s
+    except (json.JSONDecodeError, TypeError):
+        return default or {}
+
 class ModelTemplateService:
 
     def __init__(self, db: AsyncSession):
@@ -362,7 +370,7 @@ class ModelTemplateService:
             "name": template.name,
             "provider": template.provider,
             "model": template.model,
-            "config": json.loads(template.config) if template.config else {},
+            "config": _safe_json(template.config),
             "description": template.description,
             "is_default": template.is_default,
             "workspace_id": template.workspace_id,
