@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Text, DateTime, Integer
 from sqlalchemy.sql import func
 from app.db.session import Base
@@ -30,8 +31,8 @@ class BatchInstallQueue(Base):
 
     # 来源
     created_by = Column(String(36))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime(timezone=True))
 
 
@@ -56,4 +57,4 @@ class BatchInstallItem(Base):
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))

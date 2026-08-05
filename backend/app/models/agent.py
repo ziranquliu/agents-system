@@ -2,6 +2,7 @@
 Agent 模型 - 智能体定义和生命周期管理
 """
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, String, Text, DateTime, Boolean, Integer, Float
 from sqlalchemy.sql import func
@@ -41,8 +42,8 @@ class Agent(Base):
     # 归属
     workspace_id = Column(String(36), nullable=False, index=True)
     created_by = Column(String(36), nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))
 
     # 注: ORM 关系在后续开发中按需添加
 
@@ -60,5 +61,5 @@ class ModelConfigTemplate(Base):
     is_default = Column(Boolean, default=False)
     workspace_id = Column(String(36), index=True)
     created_by = Column(String(36))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))

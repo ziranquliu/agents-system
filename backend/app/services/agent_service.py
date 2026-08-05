@@ -3,6 +3,7 @@ Agent 服务 - CRUD 操作与状态管理
 """
 import json
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select, func, or_
@@ -13,7 +14,7 @@ from app.schemas.agent import AgentCreate, AgentUpdate
 
 
 _VALID_STATUS_TRANSITIONS = {
-    "draft": ["running", "stopped", "archived"],
+    "draft": ["running", "stopped"],
     "running": ["stopped", "error"],
     "stopped": ["running", "archived"],
     "error": ["stopped", "draft"],
@@ -77,6 +78,7 @@ async def get_agent(db: AsyncSession, agent_id: str) -> Optional[Agent]:
 
 async def create_agent(db: AsyncSession, data: AgentCreate, user_id: str) -> Agent:
     """创建 Agent"""
+    now = datetime.now(timezone.utc)
     agent = Agent(
         id=str(uuid.uuid4()),
         name=data.name,
@@ -95,6 +97,8 @@ async def create_agent(db: AsyncSession, data: AgentCreate, user_id: str) -> Age
         enabled_mcp_servers=json.dumps(data.enabled_mcp_servers) if data.enabled_mcp_servers else None,
         workspace_id=data.workspace_id,
         created_by=user_id,
+        created_at=now,
+        updated_at=now,
     )
     db.add(agent)
     await db.flush()
@@ -118,6 +122,7 @@ async def update_agent(db: AsyncSession, agent_id: str, data: AgentUpdate) -> Op
     for field, value in update_data.items():
         setattr(agent, field, value)
 
+    agent.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return agent
 
@@ -145,5 +150,6 @@ async def update_agent_status(db: AsyncSession, agent_id: str, new_status: str) 
         )
 
     agent.status = new_status
+    agent.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return agent

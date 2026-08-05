@@ -6,7 +6,7 @@ class TestWorkspaces:
     """工作区 CRUD + 成员管理"""
 
     @staticmethod
-    async def _create_get_id(client, headers, name="测试工作区"):
+    def _create_get_id(client, headers, name="测试工作区"):
         resp = client.post(
             "/api/v1/workspaces/",
             json={"name": name, "description": "自动化测试工作区"},

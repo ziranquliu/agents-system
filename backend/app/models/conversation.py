@@ -26,8 +26,8 @@ class Conversation(Base):
     compressed = Column(Integer, default=0)  # 压缩轮数
     summary = Column(Text)  # 对话摘要
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))
 
     # 注: ORM 关系在后续开发中按需添加
 

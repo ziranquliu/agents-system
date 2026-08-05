@@ -16,12 +16,12 @@ class TestSkills:
     }
 
     @staticmethod
-    async def _create_get_id(client, headers):
+    def _create_get_id(client, headers):
         resp = client.post("/api/v1/skills/", json=TestSkills.CREATE_PAYLOAD, headers=headers)
         return resp.json()["id"]
 
     @staticmethod
-    async def _create_agent_id(client, headers):
+    def _create_agent_id(client, headers):
         resp = client.post(
             "/api/v1/agents/",
             json={"name": "测试Agent-Skill", "type": "assistant", "description": "绑定测试"},

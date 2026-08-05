@@ -2,6 +2,7 @@
 技能 (Skill) 与 MCP Server 模型
 """
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, String, Text, DateTime, Boolean, Integer
 from sqlalchemy.sql import func
@@ -40,8 +41,8 @@ class Skill(Base):
 
     workspace_id = Column(String(36), index=True)
     created_by = Column(String(36))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))
 
 
 class SkillBinding(Base):
@@ -53,7 +54,7 @@ class SkillBinding(Base):
     skill_id = Column(String(36), nullable=False, index=True)
     config = Column(Text)  # JSON: 技能特定配置
     enabled = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
 
 
 class MCPServer(Base):
@@ -80,5 +81,5 @@ class MCPServer(Base):
     config = Column(Text)  # JSON: 完整配置
     workspace_id = Column(String(36), index=True)
     created_by = Column(String(36))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))

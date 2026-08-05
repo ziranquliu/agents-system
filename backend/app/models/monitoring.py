@@ -2,6 +2,7 @@
 多智能体监控看板模型 — 指标 / 告警 / 面板
 """
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, String, Text, DateTime, Integer, Float, Boolean
 from sqlalchemy.sql import func
@@ -31,7 +32,7 @@ class AgentMetric(Base):
 
     # 时间
     recorded_at = Column(DateTime(timezone=True), index=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
 
 
 class AlertConfig(Base):
@@ -59,8 +60,8 @@ class AlertConfig(Base):
 
     enabled = Column(Boolean, default=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))
 
 
 class AlertRecord(Base):
@@ -86,7 +87,7 @@ class AlertRecord(Base):
     resolved_at = Column(DateTime(timezone=True))
 
     fired_at = Column(DateTime(timezone=True), index=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
 
 
 class DashboardPanel(Base):
@@ -110,5 +111,5 @@ class DashboardPanel(Base):
 
     enabled = Column(Boolean, default=True)
     created_by = Column(String(36))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))

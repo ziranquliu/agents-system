@@ -2,6 +2,7 @@
 用户与角色模型
 """
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, String, Boolean, DateTime, Text
 from sqlalchemy.sql import func
@@ -22,8 +23,8 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     avatar_url = Column(String(500))
     last_login_at = Column(DateTime(timezone=True))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))
     # 注: 关联关系定义在子模型中 (Agent.created_by, Conversation.user_id)
 
 
@@ -36,7 +37,7 @@ class Role(Base):
     description = Column(String(500))
     permissions = Column(Text)  # JSON: 权限列表
     is_system = Column(Boolean, default=False)  # 系统内置角色不可删除
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
 
 
 class OperationLog(Base):

@@ -2,6 +2,7 @@
 Skill 跨 Agent 复用 - 直接引用/复制/模板三种模式
 """
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, String, DateTime, Integer
 from sqlalchemy.sql import func
@@ -46,5 +47,5 @@ class SkillReuseRelation(Base):
     # 统计
     reuse_count = Column(Integer, default=0)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))

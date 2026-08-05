@@ -15,7 +15,7 @@ class TestMCP:
     }
 
     @staticmethod
-    async def _create_get_id(client, headers):
+    def _create_get_id(client, headers):
         resp = client.post("/api/v1/mcp-servers/", json=TestMCP.CREATE_PAYLOAD, headers=headers)
         return resp.json()["id"]
 

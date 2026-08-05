@@ -6,7 +6,7 @@ class TestConversations:
     """对话 CRUD + 消息管理"""
 
     @staticmethod
-    async def _create_agent_id(client, headers):
+    def _create_agent_id(client, headers):
         """注册测试 Agent"""
         resp = client.post(
             "/api/v1/agents/",
@@ -20,7 +20,7 @@ class TestConversations:
         return resp.json()["id"]
 
     @staticmethod
-    async def _create_conv(client, headers, agent_id, title="测试对话"):
+    def _create_conv(client, headers, agent_id, title="测试对话"):
         payload = {"title": title, "agent_id": agent_id}
         resp = client.post("/api/v1/conversations/", json=payload, headers=headers)
         assert resp.status_code == 200, resp.text

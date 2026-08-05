@@ -2,6 +2,7 @@
 对话功能增强模型 — Human-in-the-loop / 质量评分 / 满意度
 """
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, String, Text, DateTime, Integer, Float, Boolean
 from sqlalchemy.sql import func
@@ -40,8 +41,8 @@ class HumanIntervention(Base):
     # 状态
     status = Column(String(20), default="pending")  # pending | approved | rejected | modified
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))
 
 
 class DialogueRating(Base):
@@ -73,7 +74,7 @@ class DialogueRating(Base):
     rated_by = Column(String(36))  # user_id or system
     rated_by_type = Column(String(20))  # user | system | admin
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
 
 
 class RatingAnalytics(Base):
@@ -96,4 +97,4 @@ class RatingAnalytics(Base):
     satisfaction_distribution = Column(Text)  # JSON: {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0}
     category_distribution = Column(Text)  # JSON: {"positive": 10, "negative": 2}
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))

@@ -2,6 +2,7 @@
 MCP 批量安装与跨 Agent 同步模型
 """
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, String, Text, DateTime, Integer, Boolean
 from sqlalchemy.sql import func
@@ -45,8 +46,8 @@ class MCPAgentBinding(Base):
     last_synced_at = Column(DateTime(timezone=True))
     sync_error = Column(Text)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))
 
 
 class MCPBatchInstallQueue(Base):
@@ -59,7 +60,7 @@ class MCPBatchInstallQueue(Base):
     success_count = Column(Integer, default=0)
     fail_count = Column(Integer, default=0)
     created_by = Column(String(36))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime(timezone=True))
 
 
@@ -77,4 +78,4 @@ class MCPBatchInstallItem(Base):
     error_message = Column(Text)
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))

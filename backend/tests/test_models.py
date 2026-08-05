@@ -112,6 +112,6 @@ class TestModels:
     # ---------- helpers ----------
 
     @staticmethod
-    async def _create_get_id(client, headers):
+    def _create_get_id(client, headers):
         resp = client.post("/api/v1/models/", json=TestModels.CREATE_PAYLOAD, headers=headers)
         return resp.json()["id"]

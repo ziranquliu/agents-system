@@ -74,8 +74,8 @@ class AgentMemory(Base):
     is_public = Column(Boolean, default=False)
 
     # 元数据
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))
 
 
 class MemoryAnalytics(Base):
@@ -103,4 +103,4 @@ class MemoryAnalytics(Base):
     medium_importance_count = Column(Integer, default=0)
     low_importance_count = Column(Integer, default=0)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))

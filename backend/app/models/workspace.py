@@ -2,6 +2,7 @@
 工作空间模型 - 多租户资源隔离
 """
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, String, DateTime, Boolean, Integer
 from sqlalchemy.sql import func
@@ -19,8 +20,8 @@ class Workspace(Base):
     owner_id = Column(String(36), nullable=False, index=True)
     member_count = Column(Integer, default=1)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))
 
 
 class WorkspaceMember(Base):
@@ -31,4 +32,4 @@ class WorkspaceMember(Base):
     workspace_id = Column(String(36), nullable=False, index=True)
     user_id = Column(String(36), nullable=False, index=True)
     role = Column(String(20), default="member")  # owner | admin | member
-    joined_at = Column(DateTime(timezone=True), server_default=func.now())
+    joined_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))

@@ -2,6 +2,7 @@
 模型配置模板增强 - 版本管理 + 绑定复用 + 灰度同步
 """
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, String, Text, DateTime, Integer
 from sqlalchemy.sql import func
@@ -26,7 +27,7 @@ class ModelTemplateVersion(Base):
     description = Column(Text)
 
     created_by = Column(String(36))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
 
 
 class ModelTemplateBinding(Base):
@@ -54,5 +55,5 @@ class ModelTemplateBinding(Base):
     # 同步历史
     last_synced_at = Column(DateTime(timezone=True))
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))
