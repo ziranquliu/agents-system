@@ -175,7 +175,7 @@ def log_execution(func: Callable) -> Callable:
 
 
 def retry(max_attempts: int = 3, delay: float = 1.0):
-    """Decorator to retry function calls on failure."""
+    """Decorator to retry function calls on failure. Supports both sync and async."""
 
     def decorator(func):
         @wraps(func)
@@ -195,6 +195,25 @@ def retry(max_attempts: int = 3, delay: float = 1.0):
                     )
                     time.sleep(delay)
 
+        @wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            for attempt in range(max_attempts):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    if attempt == max_attempts - 1:
+                        raise
+                    logger.warning(
+                        "Attempt %d/%d failed for %s: %s",
+                        attempt + 1,
+                        max_attempts,
+                        func.__name__,
+                        e,
+                    )
+                    await asyncio.sleep(delay)
+
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
         return wrapper
 
     return decorator
