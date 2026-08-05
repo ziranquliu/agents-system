@@ -1,7 +1,10 @@
 """
 本地智能体管理系统 - FastAPI 应用入口
 """
+import logging
 import sys
+
+logger = logging.getLogger(__name__)
 
 # Force UTF-8 encoding for Windows console
 if sys.platform == 'win32':
@@ -201,8 +204,7 @@ async def websocket_chat(websocket: WebSocket, conversation_id: str):
                     })
 
                 except Exception as e:
-                    import logging
-                    logging.getLogger(__name__).warning("WebSocket LLM error: %s", e)
+                    logger.warning("WebSocket LLM error: %s", e)
                     await websocket.send_json({"type": "error", "content": "模型调用失败，请重试"})
 
             elif data.get("type") == "clear":
@@ -213,8 +215,7 @@ async def websocket_chat(websocket: WebSocket, conversation_id: str):
         pass
     except Exception as e:
         try:
-            import logging
-            logging.getLogger(__name__).warning("WebSocket error: %s", e)
+            logger.warning("WebSocket error: %s", e)
             await websocket.send_json({"type": "error", "content": "连接异常，请重试"})
         except Exception:
             pass
@@ -282,7 +283,7 @@ async def _monitor_broadcast_loop():
                 for ws in disconnected:
                     _monitor_clients.discard(ws)
         except Exception as e:
-            print(f"[monitor] broadcast error: {e}")
+            logger.warning("Monitor broadcast error: %s", e)
         await asyncio.sleep(5)
 
 
@@ -316,7 +317,7 @@ async def websocket_monitor(websocket: WebSocket):
 
     await websocket.accept()
     _monitor_clients.add(websocket)
-    print(f"[monitor] client connected, total={len(_monitor_clients)}")
+    logger.info("Monitor client connected, total=%d", len(_monitor_clients))
 
     # 首次连接启动后台广播任务
     async def _start_broadcaster():
@@ -328,6 +329,15 @@ async def websocket_monitor(websocket: WebSocket):
         while True:
             # 等待客户端消息（心跳/断开检测）
             await websocket.receive_text()
+    except WebSocketDisconnect:
+        _monitor_clients.discard(websocket)
+        logger.info("Monitor client disconnected, total=%d", len(_monitor_clients))
+        # 如果没有客户端了，停止广播任务
+        if not _monitor_clients:
+            for t in asyncio.all_tasks():
+                if t.get_name() == "monitor_broadcast":
+                    t.cancel()
+                    break
     except WebSocketDisconnect:
         pass
     finally:
