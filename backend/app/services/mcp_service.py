@@ -198,7 +198,7 @@ async def health_check_server(db: AsyncSession, server_id: str) -> Optional[MCPS
 
     # 尝试健康检测
     is_healthy = False
-    async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+    async with httpx.AsyncClient(timeout=10.0, verify=True) as client:
         for url in health_urls:
             try:
                 resp = await client.get(url)
