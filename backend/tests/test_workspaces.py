@@ -21,7 +21,7 @@ class TestWorkspaces:
             json={"name": "新工作区", "description": "测试描述"},
             headers=auth_headers,
         )
-        assert resp.status_code == 200, resp.text
+        assert resp.status_code == 201, resp.text
         data = resp.json()
         assert data["name"] == "新工作区"
         assert data["description"] == "测试描述"
@@ -84,14 +84,14 @@ class TestWorkspaces:
         """删除工作区"""
         ws_id = self._create_get_id(client, auth_headers)
         resp = client.delete(f"/api/v1/workspaces/{ws_id}", headers=auth_headers)
-        assert resp.status_code == 200
+        assert resp.status_code == 204
         # 验证已删除
         resp = client.get(f"/api/v1/workspaces/{ws_id}", headers=auth_headers)
         assert resp.status_code == 404
 
     # ---------- 成员管理 ----------
 
-    async def _create_ws_with_context(self, client, auth_headers):
+    def _create_ws_with_context(self, client, auth_headers):
         ws_id = self._create_get_id(client, auth_headers)
         # 获取当前用户信息
         me_resp = client.get("/api/v1/auth/me", headers=auth_headers)
@@ -106,7 +106,7 @@ class TestWorkspaces:
             json={"user_id": my_id, "role": "member"},
             headers=auth_headers,
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 201
         assert resp.json()["user_id"] == my_id
 
     def test_add_member_invalid_role(self, client, auth_headers):
@@ -165,7 +165,7 @@ class TestWorkspaces:
             f"/api/v1/workspaces/{ws_id}/members/{my_id}",
             headers=auth_headers,
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 204
 
     def test_members_count_in_workspace(self, client, auth_headers):
         """工作区详情包含成员数"""

@@ -8,7 +8,7 @@ from app.api.v1 import (
     conversation_enhancement, knowledge, tasks, system_monitor, 
     backup, backup_enhanced, memory, model_templates, batch_install, 
     skill_reuse, mcp_batch, dialogue_enhancement, monitoring, ops, 
-    health, audit, scheduler, tokens
+    health, audit, scheduler, tokens, workflows
 )
 
 api_router = APIRouter()
@@ -73,6 +73,9 @@ api_router.include_router(health.router, tags=["各智能体健康监控"])
 api_router.include_router(audit.router, tags=["操作审计"])
 api_router.include_router(scheduler.router, tags=["全局定时调度器"])
 api_router.include_router(tokens.router, tags=["Token 使用管理"])
+
+# Workflow Engine
+api_router.include_router(workflows.router, prefix="/api/v1/workflows", tags=["DAG工作流引擎"])
 
 # Chat
 api_router.include_router(chat.router, prefix="/api/v1/chat", tags=["对话补全"])

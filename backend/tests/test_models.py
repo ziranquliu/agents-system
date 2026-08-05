@@ -22,7 +22,7 @@ class TestModels:
     def test_create_model(self, client, auth_headers):
         """创建模型配置"""
         resp = client.post("/api/v1/models/", json=self.CREATE_PAYLOAD, headers=auth_headers)
-        assert resp.status_code == 200, resp.text
+        assert resp.status_code == 201, resp.text
         data = resp.json()
         assert data["name"] == self.CREATE_PAYLOAD["name"]
         assert data["provider"] == "openai"
@@ -78,7 +78,7 @@ class TestModels:
         """删除模型"""
         model_id = self._create_get_id(client, auth_headers)
         resp = client.delete(f"/api/v1/models/{model_id}", headers=auth_headers)
-        assert resp.status_code == 200
+        assert resp.status_code == 204
         # 验证已删除
         resp = client.get(f"/api/v1/models/{model_id}", headers=auth_headers)
         assert resp.status_code == 404
@@ -106,7 +106,7 @@ class TestModels:
         """创建默认模型"""
         payload = {**self.CREATE_PAYLOAD, "name": "默认模型", "is_default": True}
         resp = client.post("/api/v1/models/", json=payload, headers=auth_headers)
-        assert resp.status_code == 200
+        assert resp.status_code == 201
         assert resp.json()["is_default"] is True
 
     # ---------- helpers ----------

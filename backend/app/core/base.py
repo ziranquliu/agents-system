@@ -16,7 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
 
 from app.db.session import get_db as _get_db
-from app.core.security import get_current_user as _get_current_user
+try:
+    from app.core.security import get_current_user as _get_current_user
+except ImportError:
+    from app.services.auth_service import get_current_user as _get_current_user
 
 logger = logging.getLogger(__name__)
 

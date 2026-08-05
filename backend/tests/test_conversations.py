@@ -23,7 +23,7 @@ class TestConversations:
     def _create_conv(client, headers, agent_id, title="测试对话"):
         payload = {"title": title, "agent_id": agent_id}
         resp = client.post("/api/v1/conversations/", json=payload, headers=headers)
-        assert resp.status_code == 200, resp.text
+        assert resp.status_code == 201, resp.text
         return resp.json()
 
     def test_create_conversation(self, client, auth_headers):
@@ -97,7 +97,7 @@ class TestConversations:
         agent_id = self._create_agent_id(client, auth_headers)
         conv = self._create_conv(client, auth_headers, agent_id)
         resp = client.delete(f"/api/v1/conversations/{conv['id']}", headers=auth_headers)
-        assert resp.status_code == 200
+        assert resp.status_code == 204
         # 验证已删除
         resp = client.get(f"/api/v1/conversations/{conv['id']}", headers=auth_headers)
         assert resp.status_code == 404
@@ -125,7 +125,7 @@ class TestConversations:
             json={"role": "user", "content": "你好"},
             headers=auth_headers,
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 201
         assert resp.json()["role"] == "user"
         assert resp.json()["content"] == "你好"
 
@@ -168,7 +168,7 @@ class TestConversations:
             json={"role": "assistant", "content": "Hello!", "tokens": 42, "model_name": "gpt-4o"},
             headers=auth_headers,
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 201
         data = resp.json()
         assert data["tokens"] == 42
         assert data["model_name"] == "gpt-4o"

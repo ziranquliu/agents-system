@@ -386,6 +386,288 @@ class TokenService:
         return {"id": alert_id, "status": status}
 
 
+class PromptCompressor:
+    """智能 Prompt 压缩器 - 裁剪冗余指令、合并重复内容"""
+
+    @staticmethod
+    def compress(
+        messages: List[Dict[str, Any]],
+        target_tokens: int = 4096,
+    ) -> Dict[str, Any]:
+        """
+        智能压缩对话消息
+        策略:
+        1. 保留所有 system 消息
+        2. 去除重复的 user 消息
+        3. 截断超长消息(保留首尾)
+        4. 压缩格式化内容(代码块、列表等)
+        """
+        original_tokens = sum(TokenService.estimate_tokens(m.get("content", "")) for m in messages)
+        if original_tokens <= target_tokens:
+            return {
+                "messages": messages,
+                "original_tokens": original_tokens,
+                "compressed_tokens": original_tokens,
+                "savings": 0,
+                "savings_pct": 0,
+            }
+
+        result = []
+        seen_contents = set()
+
+        # 1. 保留所有 system 消息(去重)
+        for m in messages:
+            if m.get("role") == "system":
+                content = m.get("content", "").strip()
+                content_hash = hash(content[:200])
+                if content_hash not in seen_contents:
+                    seen_contents.add(content_hash)
+                    result.append(m)
+
+        # 2. 处理非 system 消息
+        non_system = [m for m in messages if m.get("role") != "system"]
+        compressed_tokens = sum(TokenService.estimate_tokens(m.get("content", "")) for m in result)
+
+        for m in non_system:
+            content = m.get("content", "")
+            tokens = TokenService.estimate_tokens(content)
+
+            # 跳过重复内容
+            content_hash = hash(content[:200])
+            if content_hash in seen_contents:
+                continue
+            seen_contents.add(content_hash)
+
+            if compressed_tokens + tokens <= target_tokens:
+                result.append(m)
+                compressed_tokens += tokens
+            else:
+                # 截断策略: 保留首部和尾部
+                remaining = target_tokens - compressed_tokens
+                if remaining > 100:
+                    truncated = PromptCompressor._truncate_content(content, remaining)
+                    if truncated:
+                        result.append({
+                            "role": m["role"],
+                            "content": truncated,
+                        })
+                        compressed_tokens += TokenService.estimate_tokens(truncated)
+                break
+
+        total_compressed = sum(TokenService.estimate_tokens(m.get("content", "")) for m in result)
+        savings = original_tokens - total_compressed
+
+        return {
+            "messages": result,
+            "original_tokens": original_tokens,
+            "compressed_tokens": total_compressed,
+            "savings": savings,
+            "savings_pct": round(savings / original_tokens * 100, 1) if original_tokens else 0,
+        }
+
+    @staticmethod
+    def _truncate_content(content: str, target_tokens: int) -> str:
+        """截断内容: 保留首尾,中间用省略号"""
+        if not content:
+            return ""
+        # 按字符粗略截断(中文1字≈1token, 英文4字符≈1token)
+        cjk_count = sum(1 for c in content if ord(c) > 0x2E80)
+        char_limit = cjk_count + (target_tokens - cjk_count) * 4
+
+        if len(content) <= char_limit:
+            return content
+
+        head_size = char_limit // 2
+        tail_size = char_limit - head_size - 20  # 20 chars for marker
+        if tail_size < 0:
+            return content[:char_limit]
+
+        return (
+            content[:head_size]
+            + f"\n\n[...已压缩省略 {len(content) - char_limit} 字符...]\n\n"
+            + content[-tail_size:]
+        )
+
+    @staticmethod
+    def compress_for_cascade(
+        messages: List[Dict[str, Any]],
+        small_model_max_tokens: int = 2048,
+    ) -> Dict[str, Any]:
+        """为小模型压缩: 更激进的截断以适配小模型上下文"""
+        return PromptCompressor.compress(messages, target_tokens=small_model_max_tokens)
+
+
+class CascadeExecutor:
+    """模型级联执行器 - 小模型优先,置信度不足时升级"""
+
+    @staticmethod
+    async def execute_with_cascade(
+        messages: List[Dict[str, Any]],
+        cascade_chain: List[str],
+        task_type: str = "chat",
+        confidence_threshold: float = 0.7,
+        user_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        模型级联执行:
+        1. 先用小模型(cascade_chain[0])处理
+        2. 如果返回结果包含低置信度标记,升级到下一个模型
+        3. 重复直到达到置信度或用尽链
+        """
+        from app.services.llm import create_adapter
+
+        results = []
+        final_output = ""
+
+        for i, model_name in enumerate(cascade_chain):
+            # 构建适配器
+            pricing = MODEL_PRICING.get(model_name, {})
+            is_small_model = i < len(cascade_chain) - 1
+
+            try:
+                adapter = create_adapter("openai", {"model_name": model_name})
+                response = await adapter.chat(
+                    messages=messages,
+                    temperature=0.7,
+                )
+
+                output = response.content
+                tokens_used = TokenService.estimate_tokens(output)
+
+                results.append({
+                    "model": model_name,
+                    "output": output,
+                    "tokens": tokens_used,
+                    "is_primary": i == 0,
+                    "success": True,
+                })
+
+                # 检查是否需要升级
+                if is_small_model:
+                    confidence = CascadeExecutor._estimate_confidence(output)
+                    if confidence >= confidence_threshold:
+                        # 小模型足够好,直接返回
+                        final_output = output
+                        break
+                    else:
+                        # 置信度不够,升级
+                        logger.info(
+                            "模型 %s 置信度 %.2f < %.2f, 升级到 %s",
+                            model_name, confidence, confidence_threshold,
+                            cascade_chain[i + 1],
+                        )
+                        continue
+                else:
+                    final_output = output
+                    break
+
+            except Exception as e:
+                logger.warning("模型 %s 调用失败: %s", model_name, str(e))
+                results.append({
+                    "model": model_name,
+                    "output": "",
+                    "error": "模型调用失败",
+                    "is_primary": i == 0,
+                    "success": False,
+                })
+                continue
+
+        if not final_output and results:
+            # 所有模型都失败了,使用最后一个成功的输出
+            for r in reversed(results):
+                if r.get("success"):
+                    final_output = r["output"]
+                    break
+
+        # 计算成本
+        total_cost = 0
+        for r in results:
+            if r.get("success"):
+                total_cost += TokenService.calc_cost(
+                    r["model"], 0, r.get("tokens", 0)
+                )
+
+        return {
+            "output": final_output,
+            "models_used": [r["model"] for r in results],
+            "cascade_depth": len(results),
+            "total_tokens": sum(r.get("tokens", 0) for r in results),
+            "estimated_cost": round(total_cost, 6),
+            "results": results,
+        }
+
+    @staticmethod
+    def _estimate_confidence(output: str) -> float:
+        """
+        估算模型输出置信度(启发式规则):
+        - 包含不确定性词汇 → 降低置信度
+        - 输出长度适中 → 提高置信度
+        - 包含明确结论/数字 → 提高置信度
+        """
+        confidence = 0.8  # 基准
+
+        # 不确定性词汇
+        low_confidence_words = [
+            "可能", "也许", "不确定", "不太确定", "大概", "也许吧",
+            "possibly", "maybe", "not sure", "uncertain", "might be",
+            "我不确定", "不太清楚", "无法确定",
+        ]
+        for word in low_confidence_words:
+            if word in output:
+                confidence -= 0.1
+
+        # 确定性词汇
+        high_confidence_words = [
+            "确定", "答案是", "结果为", "正确的",
+            "definitely", "certainly", "the answer is",
+        ]
+        for word in high_confidence_words:
+            if word in output:
+                confidence += 0.05
+
+        # 长度适中(50-500字)加分
+        length = len(output)
+        if 50 <= length <= 500:
+            confidence += 0.05
+        elif length < 20:
+            confidence -= 0.15  # 太短可能是不知道答案
+
+        return max(0.0, min(1.0, confidence))
+
+    @staticmethod
+    async def select_and_execute(
+        messages: List[Dict[str, Any]],
+        task_type: str = "chat",
+        user_id: Optional[str] = None,
+        session: Optional[AsyncSession] = None,
+    ) -> Dict[str, Any]:
+        """
+        自动选择级联链并执行:
+        1. 从数据库获取级联规则
+        2. 如果没有则使用默认链
+        3. 执行级联
+        """
+        cascade_chain = DEFAULT_CASCADE_CHAIN
+        if session and user_id:
+            try:
+                budget = (await session.execute(
+                    select(TokenBudget).where(TokenBudget.user_id == user_id)
+                )).scalars().first()
+                if budget and budget.cascade_enabled:
+                    chain = _safe_json(budget.cascade_chain, None)
+                    if chain:
+                        cascade_chain = chain
+            except Exception as e:
+                logger.warning("获取级联配置失败: %s", str(e))
+
+        return await CascadeExecutor.execute_with_cascade(
+            messages=messages,
+            cascade_chain=cascade_chain,
+            task_type=task_type,
+            user_id=user_id,
+        )
+
+
 class OptimizationService:
     """Token 优化策略与效果评估"""
 

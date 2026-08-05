@@ -38,12 +38,16 @@ class SmartMockResult:
         mock_scalars.all.return_value = self._many
         return mock_scalars
 
+    def all(self):
+        """支持 result.all() 调用(如 select(User).where(...).all())"""
+        return self._many
+
 
 class SmartMockSession:
     """追踪 db.add() 对象，在 execute() 时智能返回结果"""
 
     def __init__(self):
-        self._store: Dict[type, List] = {}  # model_class -> [instances]
+        self._store: Dict[str, List] = {}  # class_name -> [instances]
         self._flush_count = 0
 
     async def execute(self, stmt):
@@ -59,14 +63,47 @@ class SmartMockSession:
         except Exception:
             return SmartMockResult()
 
-        # 处理 func.count() 查询 — entity 为 None
+        # 处理 entity 为 None 的情况（column-level select 或 func.count）
         if entity is None:
+            # 1) 尝试从列的 table 属性提取实体（如 select(Agent.id, Agent.name)）
             try:
-                # get_final_froms() 替代已废弃的 .froms
+                cols = stmt.selected_columns if hasattr(stmt, 'selected_columns') else []
+                if cols:
+                    # 尝试从第一个列的 table 属性找到表名
+                    first_table = getattr(cols[0], 'table', None)
+                    if first_table is not None:
+                        tbl_name = getattr(first_table, 'name', None)
+                    else:
+                        tbl_name = None
+                    
+                    # 如果找不到 table, 尝试从 _annotations 获取
+                    if not tbl_name:
+                        ann = getattr(cols[0], '_annotations', {})
+                        parent = ann.get('parententity', None)
+                        if parent is not None:
+                            tbl_name = getattr(parent, 'name', None)
+                    
+                    if tbl_name and tbl_name in self._tablename_to_class:
+                        model_cls = self._tablename_to_class[tbl_name]
+                        store = self._store.get(model_cls.__name__, [])
+                        col_keys = [c.name for c in cols]
+                        wc = getattr(stmt, 'whereclause', None)
+                        matches = store
+                        if wc is not None:
+                            matches = [o for o in store if self._matches_where(o, wc)]
+                        tuples = []
+                        for obj in matches:
+                            row = tuple(getattr(obj, k, None) for k in col_keys)
+                            tuples.append(row)
+                        return SmartMockResult(many=tuples)
+            except Exception:
+                pass
+
+            # 2) func.count() 子查询
+            try:
                 froms = stmt.get_final_froms() if hasattr(stmt, 'get_final_froms') else getattr(stmt, 'froms', [])
                 if froms:
                     from_clause = froms[0]
-                    # Subquery 有 .element 属性（原始 Select 语句）
                     inner = getattr(from_clause, 'element', None)
                     if inner is not None and hasattr(inner, 'column_descriptions'):
                         inner_descs = inner.column_descriptions
@@ -153,6 +190,11 @@ class SmartMockSession:
         if class_name not in self._store:
             self._store[class_name] = []
         self._store[class_name].append(instance)
+        # 维护 tablename → class_name 映射
+        if hasattr(type(instance), '__tablename__'):
+            if not hasattr(self, '_tablename_to_class'):
+                self._tablename_to_class = {}
+            self._tablename_to_class[type(instance).__tablename__] = class_name
 
     def _apply_column_defaults(self, instance):
         """对 ORM 实例中为 None 且有 Python default 的列，自动赋值"""
@@ -240,6 +282,8 @@ def mock_user():
     user.role = "admin"
     user.is_active = True
     user.workspace_id = "ws-test-001"
+    user.display_name = "Tester"
+    user.avatar_url = ""
     return user
 
 

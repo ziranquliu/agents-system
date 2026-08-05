@@ -22,7 +22,7 @@ class TestMCP:
     def test_create_mcp(self, client, auth_headers):
         """创建 MCP Server"""
         resp = client.post("/api/v1/mcp-servers/", json=self.CREATE_PAYLOAD, headers=auth_headers)
-        assert resp.status_code == 200, resp.text
+        assert resp.status_code == 201, resp.text
         data = resp.json()
         assert data["name"] == "测试MCP服务"
         assert data["protocol"] == "sse"
@@ -73,7 +73,7 @@ class TestMCP:
         """删除 MCP"""
         mcp_id = self._create_get_id(client, auth_headers)
         resp = client.delete(f"/api/v1/mcp-servers/{mcp_id}", headers=auth_headers)
-        assert resp.status_code == 200
+        assert resp.status_code == 204
         # 验证已删除
         resp = client.get(f"/api/v1/mcp-servers/{mcp_id}", headers=auth_headers)
         assert resp.status_code == 404
@@ -102,5 +102,5 @@ class TestMCP:
             "protocol": "stream",
         }
         resp = client.post("/api/v1/mcp-servers/", json=payload, headers=auth_headers)
-        assert resp.status_code == 200
+        assert resp.status_code == 201
         assert resp.json()["protocol"] == "stream"
