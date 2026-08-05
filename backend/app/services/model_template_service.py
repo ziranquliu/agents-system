@@ -387,7 +387,7 @@ class ModelTemplateService:
                     "gray_percentage": b.gray_percentage,
                     "gray_status": b.gray_status,
                     "gray_synced_version": b.gray_synced_version,
-                    "override_config": json.loads(b.override_config) if b.override_config else {},
+                    "override_config": _safe_json(b.override_config),
                     "last_synced_at": b.last_synced_at.isoformat() if b.last_synced_at else None,
                 }
                 for b in bindings

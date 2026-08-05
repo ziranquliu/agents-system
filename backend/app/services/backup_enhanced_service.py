@@ -551,7 +551,10 @@ class BackupEnhancedService:
             return None
         # 检查事件类型是否在配置范围内
         if policy.event_types:
-            types = policy.event_types if isinstance(policy.event_types, list) else json.loads(policy.event_types or "[]")
+            try:
+                types = policy.event_types if isinstance(policy.event_types, list) else json.loads(policy.event_types or "[]")
+            except (json.JSONDecodeError, TypeError):
+                types = []
             if event_type not in types:
                 return None
         record = await BackupEnhancedService.create_backup(

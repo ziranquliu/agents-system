@@ -147,7 +147,10 @@ class MCPBatchService:
         r3 = await self.db.execute(select(Agent).where(Agent.id == agent_id))
         agent = r3.scalar_one_or_none()
         if agent:
-            servers = json.loads(agent.enabled_mcp_servers) if agent.enabled_mcp_servers else []
+            try:
+                servers = json.loads(agent.enabled_mcp_servers) if agent.enabled_mcp_servers else []
+            except (json.JSONDecodeError, TypeError):
+                servers = []
             if mcp_server_id not in servers:
                 servers.append(mcp_server_id)
                 agent.enabled_mcp_servers = json.dumps(servers, ensure_ascii=False)
@@ -224,7 +227,10 @@ class MCPBatchService:
         r = await self.db.execute(select(Agent).where(Agent.id == binding.agent_id))
         agent = r.scalar_one_or_none()
         if agent:
-            servers = json.loads(agent.enabled_mcp_servers) if agent.enabled_mcp_servers else []
+            try:
+                servers = json.loads(agent.enabled_mcp_servers) if agent.enabled_mcp_servers else []
+            except (json.JSONDecodeError, TypeError):
+                servers = []
             mcp_id = binding.mcp_server_id
             if binding.sync_mode == "independent" and binding.template_id:
                 mcp_id = binding.template_id
@@ -279,7 +285,10 @@ class MCPBatchService:
             r2 = await self.db.execute(select(Agent).where(Agent.id == binding.agent_id))
             agent = r2.scalar_one_or_none()
             if agent:
-                servers = json.loads(agent.enabled_mcp_servers) if agent.enabled_mcp_servers else []
+                try:
+                    servers = json.loads(agent.enabled_mcp_servers) if agent.enabled_mcp_servers else []
+                except (json.JSONDecodeError, TypeError):
+                    servers = []
                 if source_id not in servers:
                     servers.append(source_id)
                 # 移除旧的独立 MCP
@@ -303,7 +312,10 @@ class MCPBatchService:
             r3 = await self.db.execute(select(MCPServer).where(MCPServer.id == binding.mcp_server_id))
             target = r3.scalar_one_or_none()
             if target and source:
-                override = json.loads(binding.override_config) if binding.override_config else {}
+                try:
+                    override = json.loads(binding.override_config) if binding.override_config else {}
+                except (json.JSONDecodeError, TypeError):
+                    override = {}
                 target.url = override.get("url", source.url)
                 target.protocol = override.get("protocol", source.protocol)
                 target.version = source.version

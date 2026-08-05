@@ -353,7 +353,10 @@ class BatchInstallService:
         if not queue:
             return {"error": "队列不存在"}
         items, _ = await self.get_queue_items(queue_id)
-        precheck = json.loads(queue.precheck_summary) if queue.precheck_summary else {}
+        try:
+            precheck = json.loads(queue.precheck_summary) if queue.precheck_summary else {}
+        except (json.JSONDecodeError, TypeError):
+            precheck = {}
 
         return {
             "queue_id": queue.id,
