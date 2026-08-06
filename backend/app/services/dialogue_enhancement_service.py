@@ -1,538 +1,687 @@
 """
-对话增强服务 — Human-in-the-loop / 质量评分 / 满意度 / 高级导出
+对话理解增强服务 — 意图保持 / 共指消解 / 话题切换检测
+
+功能:
+- 意图保持检测 (用户意图是否被模型正确维持)
+- 共指消解 (代词/省略指代 → 实体映射)
+- 话题切换检测 (话题漂移/硬切换/软切换)
+- 对话上下文质量评估
+- 基于规则 + 滑动窗口的轻量级实现 (可接入外部 NLP 模型)
+
+设计:
+  本服务提供两种模式:
+  1. 规则模式 (默认): 基于关键词/模式匹配的轻量级实现, 零外部依赖
+ 2. 模型模式 (可选): 通过 set_nlp_fn 注入外部 NLP 推理函数
 """
-import csv
-import io
-import json
+
+import logging
 import re
+import time
+from collections import defaultdict, deque
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Optional
+from enum import Enum
+from typing import Any, Callable, Optional
 
-from sqlalchemy import select, func as sa_func, and_
-from sqlalchemy.ext.asyncio import AsyncSession
+logger = logging.getLogger(__name__)
 
-from app.models.conversation import Conversation, Message
-from app.models.dialogue_enhancement import (
-    HumanIntervention, DialogueRating, RatingAnalytics,
-)
 
+# ============================================================
+# 数据结构
+# ============================================================
+
+class IntentType(str, Enum):
+    """意图类型"""
+    QUESTION = "question"          # 提问
+    COMMAND = "command"            # 指令
+    INFORM = "inform"              # 陈述/告知
+    CLARIFICATION = "clarification"  # 澄清
+    CONFIRMATION = "confirmation"  # 确认
+    COMPLAINT = "complaint"        # 投诉
+    GREETING = "greeting"          # 问候
+    FAREWELL = "farewell"          # 告别
+    UNKNOWN = "unknown"
+
+
+class TopicSwitchType(str, Enum):
+    """话题切换类型"""
+    CONTINUATION = "continuation"  # 同一话题继续
+    SOFT_SWITCH = "soft_switch"    # 软切换 (相关话题)
+    HARD_SWITCH = "hard_switch"    # 硬切换 (无关话题)
+    RETURN = "return"              # 回到之前的话题
+    UNKNOWN = "unknown"
+
+
+class CoreferenceType(str, Enum):
+    """共指类型"""
+    PRONOUN = "pronoun"            # 代词: 他/她/它/this/that
+    DEMONSTRATIVE = "demonstrative"  # 指示词: 这个/那个
+    ELLIPSIS = "ellipsis"          # 省略: 补全省略的主语/宾语
+    IMPLICIT = "implicit"          # 隐式指代
+
+
+@dataclass
+class IntentResult:
+    """意图识别结果"""
+    text: str = ""
+    intent: str = "unknown"
+    confidence: float = 0.0
+    entities: list[dict] = field(default_factory=list)
+    keywords: list[str] = field(default_factory=list)
+
+
+@dataclass
+class CoreferenceResult:
+    """共指消解结果"""
+    original_text: str = ""
+    resolved_text: str = ""
+    mentions: list[dict] = field(default_factory=list)  # [{span, type, antecedent, confidence}]
+    resolution_count: int = 0
+
+
+@dataclass
+class TopicSwitchResult:
+    """话题切换检测结果"""
+    switch_type: str = "continuation"
+    previous_topic: str = ""
+    current_topic: str = ""
+    confidence: float = 0.0
+    topic_keywords: list[str] = field(default_factory=list)
+    distance_score: float = 0.0  # 0=same topic, 1=completely different
+
+
+@dataclass
+class DialogueTurn:
+    """对话轮次"""
+    role: str = ""
+    content: str = ""
+    timestamp: float = 0
+    intent: Optional[IntentResult] = None
+    topic: str = ""
+
+
+@dataclass
+class ContextQuality:
+    """上下文质量评估"""
+    overall_score: float = 0.0      # 0-100
+    intent_consistency: float = 0.0  # 意图一致性
+    topic_coherence: float = 0.0     # 话题连贯性
+    coreference_resolution: float = 0.0  # 共指消解覆盖率
+    context_completeness: float = 0.0  # 上下文完整度
+    issues: list[dict] = field(default_factory=list)
+    suggestions: list[str] = field(default_factory=list)
+
+
+# ============================================================
+# 规则引擎 (轻量级 NLP)
+# ============================================================
+
+class RuleBasedNLP:
+    """基于规则的轻量级 NLP 引擎"""
+
+    # 意图关键词模式
+    INTENT_PATTERNS = {
+        IntentType.QUESTION: [
+            r"[？\?]$", r"^什么", r"^怎么", r"^如何", r"^为什么", r"^哪个", r"^多少",
+            r"^请问", r"^能否", r"^可以.*吗", r"^是不是", r"^有没有",
+            r"^what\b", r"^how\b", r"^why\b", r"^which\b", r"^where\b", r"^when\b",
+            r"^can\b", r"^is\b.*\?", r"^do\b.*\?", r"^does\b.*\?",
+        ],
+        IntentType.COMMAND: [
+            r"^请", r"^帮我", r"^执行", r"^运行", r"^创建", r"^删除", r"^修改",
+            r"^设置", r"^打开", r"^关闭", r"^发送", r"^搜索",
+            r"^please\b", r"^run\b", r"^create\b", r"^delete\b", r"^send\b",
+        ],
+        IntentType.INFORM: [
+            r"^我", r"^觉得", r"^认为", r"^知道", r"^发现", r"^注意",
+            r"^I think", r"^I know", r"^I found", r"^I noticed",
+        ],
+        IntentType.CLARIFICATION: [
+            r"就是说", r"你的意思是", r"换句话说", r"也就是说",
+            r"you mean", r"in other words", r"so basically",
+        ],
+        IntentType.CONFIRMATION: [
+            r"好的", r"对的", r"是的", r"没错", r"确认",
+            r"\byes\b", r"\bok\b", r"\bcorrect\b", r"\bright\b",
+        ],
+        IntentType.COMPLAINT: [
+            r"不好", r"太慢", r"有问题", r"错误", r"失败", r"不行",
+            r"bad\b", r"slow\b", r"error\b", r"fail\b", r"broken\b",
+        ],
+        IntentType.GREETING: [
+            r"^你好", r"^嗨", r"^哈喽", r"^早上好", r"^下午好",
+            r"^hello\b", r"^hi\b", r"^hey\b", r"^good morning\b",
+        ],
+        IntentType.FAREWELL: [
+            r"^再见", r"^拜拜", r"^下次见", r"^告辞",
+            r"^bye\b", r"^goodbye\b", r"^see you\b",
+        ],
+    }
+
+    # 代词映射
+    PRONOUN_MAP = {
+        "他": "PERSON", "她": "PERSON", "它": "THING",
+        "这个": "THING", "那个": "THING", "这些": "THINGS", "那些": "THINGS",
+        "这里": "PLACE", "那里": "PLACE",
+        "his": "PERSON", "her": "PERSON", "its": "THING",
+        "this": "THING", "that": "THING",
+        "they": "PERSONS", "them": "PERSONS",
+        "it": "THING", "he": "PERSON", "she": "PERSON",
+    }
+
+    # 话题关键词提取 (简单 TF 模型)
+    STOP_WORDS = {
+        "的", "了", "在", "是", "我", "有", "和", "就", "不", "人", "都", "一", "一个",
+        "上", "也", "很", "到", "说", "要", "去", "你", "会", "着", "没有", "看", "好",
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "can", "shall", "to", "of", "in", "for",
+        "on", "with", "at", "by", "from", "it", "this", "that", "as",
+        "i", "you", "he", "she", "we", "they", "me", "him", "her", "us", "them",
+        "my", "your", "his", "our", "their", "its",
+        "and", "or", "but", "not", "so", "if", "then", "than", "too", "very",
+    }
+
+    # 话题分类关键词库
+    TOPIC_KEYWORDS = {
+        "programming": ["代码", "编程", "python", "java", "javascript", "函数", "变量", "类", "接口",
+                        "code", "program", "function", "class", "api", "debug", "bug", "compile"],
+        "database": ["数据库", "sql", "查询", "表", "索引", "事务", "连接池",
+                     "database", "query", "table", "index", "transaction", "redis", "mysql", "postgres"],
+        "deployment": ["部署", "上线", "运维", "docker", "kubernetes", "k8s", "ci/cd", "nginx",
+                       "deploy", "container", "pod", "service", "ingress"],
+        "ai_ml": ["模型", "训练", "推理", "embedding", "向量", "llm", "gpt", "claude", "prompt",
+                  "model", "train", "inference", "neural", "machine learning", "deep learning"],
+        "security": ["安全", "认证", "授权", "加密", "token", "jwt", "ssl", "tls",
+                     "security", "auth", "encrypt", "permission", "vulnerability"],
+        "frontend": ["前端", "页面", "组件", "css", "html", "react", "vue", "ui", "ux",
+                     "frontend", "component", "style", "layout", "design"],
+        "backend": ["后端", "接口", "服务", "微服务", "rest", "grpc", "消息队列",
+                    "backend", "server", "microservice", "restful", "queue"],
+        "testing": ["测试", "单元测试", "集成测试", "自动化测试", "pytest", "junit",
+                    "test", "unittest", "integration", "mock", "assert"],
+    }
+
+    def detect_intent(self, text: str) -> IntentResult:
+        """检测用户意图"""
+        text_stripped = text.strip()
+        text_lower = text_stripped.lower()
+        best_intent = IntentType.UNKNOWN
+        best_confidence = 0.0
+
+        for intent, patterns in self.INTENT_PATTERNS.items():
+            matches = sum(1 for p in patterns if re.search(p, text_lower))
+            if matches > 0:
+                confidence = min(1.0, 0.5 + matches * 0.2)
+                if confidence > best_confidence:
+                    best_confidence = confidence
+                    best_intent = intent
+
+        # 提取关键词
+        keywords = self._extract_keywords(text_stripped)
+
+        # 提取实体 (简单正则)
+        entities = self._extract_entities(text_stripped)
+
+        return IntentResult(
+            text=text_stripped,
+            intent=best_intent.value,
+            confidence=round(best_confidence, 3),
+            entities=entities,
+            keywords=keywords,
+        )
+
+    def resolve_coreference(self, text: str, context: list[dict]) -> CoreferenceResult:
+        """共指消解 (基于规则)"""
+        if not context:
+            return CoreferenceResult(original_text=text, resolved_text=text, resolution_count=0)
+
+        result = CoreferenceResult(original_text=text, mentions=[])
+        resolved = text
+
+        # 构建先行词索引 (最近的名词短语)
+        antecedents = []
+        for msg in reversed(context[-10:]):  # 最近 10 条
+            content = msg.get("content", "")
+            # 简单实体提取
+            ents = self._extract_entities(content)
+            for e in ents:
+                antecedents.append(e)
+            # 提取名词短语 (简化: 中文 2-6 字词组)
+            noun_phrases = re.findall(r'[\u4e00-\u9fff]{2,6}', content)
+            for np in noun_phrases:
+                if np not in [a["text"] for a in antecedents]:
+                    antecedents.append({"text": np, "type": "NP"})
+
+        if not antecedents:
+            return CoreferenceResult(original_text=text, resolved_text=text, resolution_count=0)
+
+        # 代词替换
+        for pronoun, ent_type in self.PRONOUN_MAP.items():
+            if pronoun in resolved and antecedents:
+                # 找到匹配类型的先行词
+                matching = [a for a in antecedents if a.get("type", "").startswith(ent_type[:4])]
+                if matching:
+                    antecedent = matching[0]["text"]
+                    mention = {
+                        "span": pronoun,
+                        "type": CoreferenceType.PRONOUN.value,
+                        "antecedent": antecedent,
+                        "confidence": 0.7,
+                    }
+                    result.mentions.append(mention)
+                    resolved = resolved.replace(pronoun, antecedent, 1)
+                    result.resolution_count += 1
+
+        result.resolved_text = resolved
+        return result
+
+    def detect_topic_switch(
+        self, current_text: str, history: list[dict], threshold: float = 0.3
+    ) -> TopicSwitchResult:
+        """话题切换检测"""
+        if not history:
+            topic = self._extract_topic(current_text)
+            return TopicSwitchResult(
+                switch_type=TopicSwitchType.CONTINUATION.value,
+                current_topic=topic,
+                topic_keywords=self._extract_keywords(current_text)[:5],
+                confidence=0.5,
+                distance_score=0,
+            )
+
+        # 提取当前话题
+        current_topic = self._extract_topic(current_text)
+        current_keywords = set(self._extract_keywords(current_text))
+
+        # 提取历史话题 (最近 5 条)
+        history_keywords: set[str] = set()
+        last_topic = ""
+        for msg in history[-5:]:
+            history_keywords.update(self._extract_keywords(msg.get("content", "")))
+            t = self._extract_topic(msg.get("content", ""))
+            if t:
+                last_topic = t
+
+        # 计算话题距离 (Jaccard 距离)
+        if current_keywords and history_keywords:
+            intersection = current_keywords & history_keywords
+            union = current_keywords | history_keywords
+            similarity = len(intersection) / max(len(union), 1)
+            distance = 1.0 - similarity
+        else:
+            distance = 0.5
+
+        # 判断切换类型
+        if distance < threshold * 0.5:
+            switch_type = TopicSwitchType.CONTINUATION.value
+        elif distance < threshold:
+            switch_type = TopicSwitchType.SOFT_SWITCH.value
+        elif current_topic == last_topic and distance >= threshold:
+            switch_type = TopicSwitchType.RETURN.value
+        else:
+            switch_type = TopicSwitchType.HARD_SWITCH.value
+
+        return TopicSwitchResult(
+            switch_type=switch_type,
+            previous_topic=last_topic,
+            current_topic=current_topic,
+            confidence=round(min(1.0, distance + 0.3), 3),
+            topic_keywords=list(current_keywords)[:5],
+            distance_score=round(distance, 3),
+        )
+
+    def _extract_topic(self, text: str) -> str:
+        """提取话题标签"""
+        text_lower = text.lower()
+        scores: dict[str, int] = defaultdict(int)
+        for topic, keywords in self.TOPIC_KEYWORDS.items():
+            for kw in keywords:
+                if kw in text_lower:
+                    scores[topic] += 1
+        if scores:
+            return max(scores, key=scores.get)
+        return "general"
+
+    def _extract_keywords(self, text: str) -> list[str]:
+        """提取关键词"""
+        text_lower = text.lower()
+        # 中文: 2-6 字词组
+        cn_words = re.findall(r'[\u4e00-\u9fff]{2,6}', text_lower)
+        # 英文: 按空格分割
+        en_words = re.findall(r'[a-z_][a-z0-9_]{1,30}', text_lower)
+        all_words = cn_words + en_words
+        # 过滤停用词
+        return [w for w in all_words if w not in self.STOP_WORDS and len(w) >= 2]
+
+    def _extract_entities(self, text: str) -> list[dict]:
+        """简单实体提取"""
+        entities = []
+        # 数字
+        for m in re.finditer(r'\b\d+\.?\d*\b', text):
+            entities.append({"text": m.group(), "type": "NUMBER", "start": m.start(), "end": m.end()})
+        # URL
+        for m in re.finditer(r'https?://\S+', text):
+            entities.append({"text": m.group(), "type": "URL", "start": m.start(), "end": m.end()})
+        # 邮箱
+        for m in re.finditer(r'\b[\w.+-]+@[\w-]+\.[\w.]+\b', text):
+            entities.append({"text": m.group(), "type": "EMAIL", "start": m.start(), "end": m.end()})
+        # 文件名
+        for m in re.finditer(r'[\w./\\-]+\.(py|js|ts|java|go|rs|yaml|json|md|txt)', text):
+            entities.append({"text": m.group(), "type": "FILE", "start": m.start(), "end": m.end()})
+        return entities
+
+
+# ============================================================
+# 主服务
+# ============================================================
 
 class DialogueEnhancementService:
+    """
+    对话理解增强服务
 
-    def __init__(self, db: AsyncSession):
-        self.db = db
+    - 意图识别: 基于规则/正则, 支持 8 类意图
+    - 共指消解: 代词→先行词替换, 基于上下文窗口
+    - 话题切换: Jaccard 距离, 3 级切换检测
+    - 上下文质量: 4 维度评分 (意图一致性/话题连贯性/共指覆盖/完整度)
+    - 可扩展: 通过 set_nlp_fn() 注入外部 NLP 模型
+    """
 
-    # ----------------------------------------------------------
-    # Human-in-the-Loop
-    # ----------------------------------------------------------
+    def __init__(self, context_window: int = 20):
+        self._nlp = RuleBasedNLP()
+        self._external_nlp_fn: Optional[Callable] = None
+        self._dialogue_history: dict[str, list[DialogueTurn]] = defaultdict(list)
+        self._context_window = context_window
 
-    async def create_intervention(
-        self,
-        conversation_id: str,
-        agent_id: str,
-        intervention_type: str,
-        original_content: str,
-        message_id: str = "",
-        handled_by: str = "",
-    ) -> HumanIntervention:
-        """创建人工介入请求"""
-        intervention = HumanIntervention(
-            conversation_id=conversation_id,
-            message_id=message_id,
-            agent_id=agent_id,
-            intervention_type=intervention_type,
-            original_content=original_content,
-            status="pending",
-            handled_by=handled_by,
-        )
-        self.db.add(intervention)
-        await self.db.flush()
-        return intervention
-
-    async def approve_intervention(self, intervention_id: str, note: str = ""
-                                   ) -> Optional[HumanIntervention]:
-        """审批通过人工介入"""
-        r = await self.db.execute(
-            select(HumanIntervention).where(HumanIntervention.id == intervention_id)
-        )
-        inv = r.scalar_one_or_none()
-        if not inv:
-            return None
-        inv.approved = True
-        inv.approval_note = note
-        inv.status = "approved"
-        inv.handled_at = datetime.now(timezone.utc)
-        await self.db.flush()
-        return inv
-
-    async def reject_intervention(self, intervention_id: str, note: str = ""
-                                  ) -> Optional[HumanIntervention]:
-        """驳回人工介入"""
-        r = await self.db.execute(
-            select(HumanIntervention).where(HumanIntervention.id == intervention_id)
-        )
-        inv = r.scalar_one_or_none()
-        if not inv:
-            return None
-        inv.approved = False
-        inv.approval_note = note
-        inv.status = "rejected"
-        inv.handled_at = datetime.now(timezone.utc)
-        await self.db.flush()
-        return inv
-
-    async def modify_content(self, intervention_id: str, new_content: str
-                            ) -> Optional[HumanIntervention]:
-        """修改 AI 回复内容"""
-        r = await self.db.execute(
-            select(HumanIntervention).where(HumanIntervention.id == intervention_id)
-        )
-        inv = r.scalar_one_or_none()
-        if not inv:
-            return None
-        inv.modified_content = new_content
-        inv.status = "modified"
-        inv.handled_at = datetime.now(timezone.utc)
-        await self.db.flush()
-        return inv
-
-    async def list_interventions(
-        self,
-        conversation_id: Optional[str] = None,
-        agent_id: Optional[str] = None,
-        status: Optional[str] = None,
-        offset: int = 0,
-        limit: int = 20,
-    ) -> tuple[list[HumanIntervention], int]:
-        conditions = []
-        if conversation_id:
-            conditions.append(HumanIntervention.conversation_id == conversation_id)
-        if agent_id:
-            conditions.append(HumanIntervention.agent_id == agent_id)
-        if status:
-            conditions.append(HumanIntervention.status == status)
-
-        where = and_(*conditions) if conditions else True
-        count_q = select(sa_func.count()).select_from(HumanIntervention).where(where)
-        total = (await self.db.execute(count_q)).scalar() or 0
-
-        r = await self.db.execute(
-            select(HumanIntervention).where(where)
-            .order_by(HumanIntervention.created_at.desc())
-            .offset(offset).limit(limit)
-        )
-        return list(r.scalars().all()), total
+    def set_nlp_fn(self, fn: Callable):
+        """注入外部 NLP 函数 (async fn(text, context) -> dict)"""
+        self._external_nlp_fn = fn
 
     # ----------------------------------------------------------
-    # 对话评分
+    # 意图识别
     # ----------------------------------------------------------
 
-    async def create_rating(self, data: dict[str, Any]) -> DialogueRating:
-        """创建评分记录，自动计算综合分"""
-        scores = [
-            data.get("relevance_score", 0) or 0,
-            data.get("accuracy_score", 0) or 0,
-            data.get("completeness_score", 0) or 0,
-            data.get("clarity_score", 0) or 0,
-            data.get("speed_score", 0) or 0,
-        ]
-        valid_scores = [s for s in scores if s > 0]
-        overall = round(sum(valid_scores) / len(valid_scores), 2) if valid_scores else 0.0
+    async def detect_intent(self, text: str, session_id: str = "") -> dict:
+        """识别用户意图"""
+        if self._external_nlp_fn:
+            try:
+                result = await self._external_nlp_fn(text, [])
+                return result
+            except Exception as e:
+                logger.warning("外部 NLP 调用失败, 回退到规则模式: %s", e)
 
-        rating = DialogueRating(
-            conversation_id=data["conversation_id"],
-            message_id=data.get("message_id", ""),
-            satisfaction_score=data.get("satisfaction_score"),
-            relevance_score=data.get("relevance_score"),
-            accuracy_score=data.get("accuracy_score"),
-            completeness_score=data.get("completeness_score"),
-            clarity_score=data.get("clarity_score"),
-            speed_score=data.get("speed_score"),
-            overall_score=overall,
-            feedback_text=data.get("feedback_text", ""),
-            feedback_category=data.get("feedback_category", "neutral"),
-            rated_by=data.get("rated_by", ""),
-            rated_by_type=data.get("rated_by_type", "user"),
-        )
-        self.db.add(rating)
-        await self.db.flush()
-        return rating
+        result = self._nlp.detect_intent(text)
 
-    async def list_ratings(
-        self,
-        conversation_id: Optional[str] = None,
-        min_overall: Optional[float] = None,
-        feedback_category: Optional[str] = None,
-        offset: int = 0,
-        limit: int = 20,
-    ) -> tuple[list[DialogueRating], int]:
-        conditions = []
-        if conversation_id:
-            conditions.append(DialogueRating.conversation_id == conversation_id)
-        if min_overall is not None:
-            conditions.append(DialogueRating.overall_score >= min_overall)
-        if feedback_category:
-            conditions.append(DialogueRating.feedback_category == feedback_category)
-
-        where = and_(*conditions) if conditions else True
-        count_q = select(sa_func.count()).select_from(DialogueRating).where(where)
-        total = (await self.db.execute(count_q)).scalar() or 0
-
-        r = await self.db.execute(
-            select(DialogueRating).where(where)
-            .order_by(DialogueRating.created_at.desc())
-            .offset(offset).limit(limit)
-        )
-        return list(r.scalars().all()), total
-
-    async def get_rating_stats(self) -> dict[str, Any]:
-        """获取评分统计"""
-        r = await self.db.execute(select(DialogueRating))
-        ratings = list(r.scalars().all())
-
-        if not ratings:
-            return {
-                "total_ratings": 0,
-                "avg_satisfaction": 0,
-                "avg_overall": 0,
-                "avg_relevance": 0, "avg_accuracy": 0,
-                "avg_completeness": 0, "avg_clarity": 0, "avg_speed": 0,
-                "satisfaction_distribution": {},
-                "category_distribution": {},
-            }
-
-        total = len(ratings)
-        satisfaction_dist: dict[str, int] = {}
-        category_dist: dict[str, int] = {}
-        sum_sat = sum_rel = sum_acc = sum_com = sum_cla = sum_spd = sum_ov = 0
-
-        for r in ratings:
-            if r.satisfaction_score:
-                k = str(r.satisfaction_score)
-                satisfaction_dist[k] = satisfaction_dist.get(k, 0) + 1
-                sum_sat += r.satisfaction_score
-            if r.feedback_category:
-                category_dist[r.feedback_category] = category_dist.get(r.feedback_category, 0) + 1
-            sum_rel += r.relevance_score or 0
-            sum_acc += r.accuracy_score or 0
-            sum_com += r.completeness_score or 0
-            sum_cla += r.clarity_score or 0
-            sum_spd += r.speed_score or 0
-            sum_ov += r.overall_score or 0
+        # 记录到对话历史
+        if session_id:
+            turn = DialogueTurn(
+                role="user",
+                content=text,
+                timestamp=time.time(),
+                intent=result,
+            )
+            self._dialogue_history[session_id].append(turn)
+            self._trim_history(session_id)
 
         return {
-            "total_ratings": total,
-            "avg_satisfaction": round(sum_sat / total, 2) if sum_sat else 0,
-            "avg_overall": round(sum_ov / total, 2),
-            "avg_relevance": round(sum_rel / total, 2),
-            "avg_accuracy": round(sum_acc / total, 2),
-            "avg_completeness": round(sum_com / total, 2),
-            "avg_clarity": round(sum_cla / total, 2),
-            "avg_speed": round(sum_spd / total, 2),
-            "satisfaction_distribution": dict(sorted(satisfaction_dist.items())),
-            "category_distribution": category_dist,
+            "text": result.text,
+            "intent": result.intent,
+            "confidence": result.confidence,
+            "entities": result.entities,
+            "keywords": result.keywords,
         }
 
-    async def record_analytics_snapshot(self, period: str = "realtime") -> RatingAnalytics:
-        """记录评分分析快照"""
-        stats = await self.get_rating_stats()
-        analytics = RatingAnalytics(
-            period=period,
-            total_ratings=stats["total_ratings"],
-            avg_satisfaction=stats["avg_satisfaction"],
-            avg_relevance=stats["avg_relevance"],
-            avg_accuracy=stats["avg_accuracy"],
-            avg_completeness=stats["avg_completeness"],
-            avg_clarity=stats["avg_clarity"],
-            avg_speed=stats["avg_speed"],
-            avg_overall=stats["avg_overall"],
-            satisfaction_distribution=json.dumps(stats["satisfaction_distribution"], ensure_ascii=False),
-            category_distribution=json.dumps(stats["category_distribution"], ensure_ascii=False),
-        )
-        self.db.add(analytics)
-        await self.db.flush()
-        return analytics
+    async def detect_intent_batch(self, texts: list[str]) -> list[dict]:
+        """批量意图识别"""
+        return [await self.detect_intent(t) for t in texts]
 
     # ----------------------------------------------------------
-    # 高级导出 (CSV)
+    # 共指消解
     # ----------------------------------------------------------
 
-    async def export_conversation_csv(self, conversation_id: str) -> str:
-        """导出对话为 CSV"""
-        r = await self.db.execute(
-            select(Message).where(Message.conversation_id == conversation_id)
-            .order_by(Message.created_at)
-        )
-        messages = list(r.scalars().all())
+    async def resolve_coreference(
+        self, text: str, session_id: str = ""
+    ) -> dict:
+        """共指消解"""
+        history = []
+        if session_id:
+            turns = self._dialogue_history.get(session_id, [])
+            history = [{"content": t.content, "role": t.role} for t in turns[-self._context_window:]]
 
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["序号", "角色", "内容", "Token数", "模型", "时间"])
+        if self._external_nlp_fn:
+            try:
+                result = await self._external_nlp_fn(text, history)
+                return result
+            except Exception as e:
+                logger.warning("外部 NLP 共指消解失败: %s", e)
 
-        for i, m in enumerate(messages, 1):
-            writer.writerow([
-                i,
-                m.role,
-                m.content[:500] if m.content else "",
-                m.total_tokens or 0,
-                m.model_used or "",
-                m.created_at.isoformat() if m.created_at else "",
-            ])
-
-        return output.getvalue()
-
-    async def export_conversation_pdf_html(self, conversation_id: str) -> str:
-        """导出对话为 HTML（用于打印/转 PDF）"""
-        r = await self.db.execute(
-            select(Conversation).where(Conversation.id == conversation_id)
-        )
-        conv = r.scalar_one_or_none()
-        if not conv:
-            raise ValueError("对话不存在")
-
-        r2 = await self.db.execute(
-            select(Message).where(Message.conversation_id == conversation_id)
-            .order_by(Message.created_at)
-        )
-        messages = list(r2.scalars().all())
-
-        html_parts = [f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>{conv.title or '对话导出'}</title>
-<style>
-  body {{ font-family: 'Segoe UI', sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }}
-  h1 {{ font-size: 1.5em; color: #333; }}
-  .meta {{ color: #666; font-size: 0.9em; margin-bottom: 20px; }}
-  .msg {{ margin: 12px 0; padding: 12px; border-radius: 8px; }}
-  .msg.user {{ background: #e3f2fd; }}
-  .msg.assistant {{ background: #f3e5f5; }}
-  .msg.system {{ background: #fff3e0; }}
-  .role {{ font-weight: bold; font-size: 0.85em; margin-bottom: 4px; }}
-  .content {{ white-space: pre-wrap; font-size: 0.95em; }}
-  .time {{ color: #999; font-size: 0.75em; margin-top: 4px; }}
-  @media print {{ body {{ margin: 0; }} }}
-</style></head><body>
-<h1>{conv.title or '对话导出'}</h1>
-<div class="meta">消息数: {len(messages)} | 创建时间: {conv.created_at}</div>
-<hr>"""]
-
-        for m in messages:
-            role_label = {"user": "👤 用户", "assistant": "🤖 AI", "system": "⚙️ 系统", "tool": "🔧 工具"}.get(m.role, m.role)
-            html_parts.append(f"""<div class="msg {m.role}">
-  <div class="role">{role_label}</div>
-  <div class="content">{m.content}</div>
-  <div class="time">{'Token: ' + str(m.total_tokens) if m.total_tokens else ''} | {m.created_at}</div>
-</div>""")
-
-        html_parts.append("</body></html>")
-        return "\n".join(html_parts)
-
-    async def list_conversations_for_export(
-        self,
-        agent_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        offset: int = 0,
-        limit: int = 20,
-    ) -> tuple[list[Conversation], int]:
-        """获取可用于导出的对话列表"""
-        conditions = []
-        if agent_id:
-            conditions.append(Conversation.agent_id == agent_id)
-        if user_id:
-            conditions.append(Conversation.user_id == user_id)
-
-        where = and_(*conditions) if conditions else True
-        count_q = select(sa_func.count()).select_from(Conversation).where(where)
-        total = (await self.db.execute(count_q)).scalar() or 0
-
-        r = await self.db.execute(
-            select(Conversation).where(where)
-            .order_by(Conversation.updated_at.desc())
-            .offset(offset).limit(limit)
-        )
-        return list(r.scalars().all()), total
+        result = self._nlp.resolve_coreference(text, history)
+        return {
+            "original_text": result.original_text,
+            "resolved_text": result.resolved_text,
+            "mentions": result.mentions,
+            "resolution_count": result.resolution_count,
+        }
 
     # ----------------------------------------------------------
-    # 4.15.7 批量导出（多选会话）
+    # 话题切换检测
     # ----------------------------------------------------------
 
-    _SENSITIVE_PATTERNS = [
-        (re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"), "***@***"),
-        (re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)"), "1**********"),
-        (re.compile(r"(?<!\d)\d{17}[\dXx](?!\d)"), "******************"),
-        (re.compile(r"(?<!\d)\d{15}(?!\d)"), "***************"),
-    ]
+    async def detect_topic_switch(
+        self, text: str, session_id: str = "", threshold: float = 0.3
+    ) -> dict:
+        """话题切换检测"""
+        history = []
+        if session_id:
+            turns = self._dialogue_history.get(session_id, [])
+            history = [{"content": t.content} for t in turns[-self._context_window:]]
 
-    @staticmethod
-    def _mask_text(text: str) -> str:
-        """脱敏：邮箱 / 手机号 / 身份证 / 银行卡号"""
-        if not text:
-            return text
-        for pattern, repl in DialogueEnhancementService._SENSITIVE_PATTERNS:
-            text = pattern.sub(repl, text)
-        return text
+        result = self._nlp.detect_topic_switch(text, history, threshold)
 
-    async def batch_export_conversations(
-        self,
-        conversation_ids: list[str],
-        export_format: str = "csv",
-        include_metadata: bool = False,
-        mask_sensitive: bool = False,
-    ) -> tuple[str, str]:
-        """批量导出多个对话，返回 (内容, 建议文件名)。
-        支持格式: csv / json / html
-        """
-        export_format = (export_format or "csv").lower()
-        if export_format not in ("csv", "json", "html"):
-            raise ValueError("不支持的导出格式，仅支持 csv / json / html")
+        # 记录话题到历史
+        if session_id:
+            for turn in reversed(self._dialogue_history.get(session_id, [])):
+                if not turn.topic:
+                    turn.topic = result.previous_topic or result.current_topic
+                    break
 
-        results: list[tuple[Conversation, list[Message]]] = []
-        for cid in conversation_ids:
-            r = await self.db.execute(
-                select(Conversation).where(Conversation.id == cid)
-            )
-            conv = r.scalar_one_or_none()
-            if not conv:
-                continue
-            r2 = await self.db.execute(
-                select(Message).where(Message.conversation_id == cid)
-                .order_by(Message.created_at)
-            )
-            results.append((conv, list(r2.scalars().all())))
+        return {
+            "switch_type": result.switch_type,
+            "previous_topic": result.previous_topic,
+            "current_topic": result.current_topic,
+            "confidence": result.confidence,
+            "topic_keywords": result.topic_keywords,
+            "distance_score": result.distance_score,
+        }
 
-        if not results:
-            raise ValueError("未找到可导出的对话，请检查所选会话是否存在")
+    # ----------------------------------------------------------
+    # 上下文质量评估
+    # ----------------------------------------------------------
 
-        ts = datetime.now().strftime("%Y%m%d%H%M%S")
-        if export_format == "json":
-            content = self._batch_to_json(results, include_metadata, mask_sensitive)
-            return content, f"conversations_batch_{ts}.json"
-        if export_format == "html":
-            content = self._batch_to_html(results, include_metadata, mask_sensitive)
-            return content, f"conversations_batch_{ts}.html"
-        content = self._batch_to_csv(results, include_metadata, mask_sensitive)
-        return content, f"conversations_batch_{ts}.csv"
-
-    def _batch_to_csv(
-        self,
-        results: list[tuple[Conversation, list[Message]]],
-        include_metadata: bool,
-        mask_sensitive: bool,
-    ) -> str:
-        output = io.StringIO()
-        writer = csv.writer(output)
-        if include_metadata:
-            writer.writerow(["对话ID", "对话标题", "Agent", "用户", "序号", "角色", "内容", "Token数", "模型", "时间"])
-        else:
-            writer.writerow(["对话ID", "序号", "角色", "内容", "Token数", "模型", "时间"])
-
-        for conv, messages in results:
-            for i, m in enumerate(messages, 1):
-                content = m.content or ""
-                if mask_sensitive:
-                    content = self._mask_text(content)
-                row = [conv.id]
-                if include_metadata:
-                    row += [conv.title or "", conv.agent_id, conv.user_id]
-                row += [
-                    i,
-                    m.role,
-                    content[:500],
-                    m.total_tokens or 0,
-                    m.model_used or "",
-                    m.created_at.isoformat() if m.created_at else "",
-                ]
-                writer.writerow(row)
-        return output.getvalue()
-
-    def _batch_to_json(
-        self,
-        results: list[tuple[Conversation, list[Message]]],
-        include_metadata: bool,
-        mask_sensitive: bool,
-    ) -> str:
-        payload = []
-        for conv, messages in results:
-            item: dict[str, Any] = {
-                "conversation_id": conv.id,
-                "title": conv.title or "",
+    async def evaluate_context_quality(self, session_id: str) -> dict:
+        """评估对话上下文质量"""
+        turns = self._dialogue_history.get(session_id, [])
+        if not turns:
+            return {
+                "overall_score": 0,
+                "issues": ["无对话历史"],
+                "suggestions": ["开始对话以获取质量评估"],
             }
-            if include_metadata:
-                item["agent_id"] = conv.agent_id
-                item["user_id"] = conv.user_id
-                item["workspace_id"] = getattr(conv, "workspace_id", None)
-                item["status"] = getattr(conv, "status", None)
-                item["message_count"] = len(messages)
-                item["token_count"] = getattr(conv, "token_count", None)
-                item["created_at"] = conv.created_at.isoformat() if conv.created_at else None
-                item["updated_at"] = conv.updated_at.isoformat() if conv.updated_at else None
 
-            messages_out = []
-            for m in messages:
-                content = m.content or ""
-                if mask_sensitive:
-                    content = self._mask_text(content)
-                msg: dict[str, Any] = {
-                    "role": m.role,
-                    "content": content,
-                    "content_type": getattr(m, "content_type", None),
-                    "total_tokens": m.total_tokens or 0,
-                    "model_used": m.model_used or "",
-                    "created_at": m.created_at.isoformat() if m.created_at else None,
-                }
-                if include_metadata:
-                    msg["message_id"] = m.id
-                    msg["prompt_tokens"] = getattr(m, "prompt_tokens", None) or 0
-                    msg["completion_tokens"] = getattr(m, "completion_tokens", None) or 0
-                messages_out.append(msg)
-            item["messages"] = messages_out
-            payload.append(item)
-        return json.dumps(payload, ensure_ascii=False, indent=2)
+        quality = ContextQuality()
+        issues = []
+        suggestions = []
 
-    def _batch_to_html(
-        self,
-        results: list[tuple[Conversation, list[Message]]],
-        include_metadata: bool,
-        mask_sensitive: bool,
-    ) -> str:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        parts = [f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>批量对话导出</title>
-<style>
-  body {{ font-family: 'Segoe UI', sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }}
-  h1 {{ font-size: 1.5em; color: #333; }}
-  h2 {{ font-size: 1.2em; color: #444; margin-top: 28px; border-bottom: 1px solid #eee; padding-bottom: 6px; }}
-  .meta {{ color: #666; font-size: 0.9em; margin-bottom: 20px; }}
-  .msg {{ margin: 12px 0; padding: 12px; border-radius: 8px; }}
-  .msg.user {{ background: #e3f2fd; }}
-  .msg.assistant {{ background: #f3e5f5; }}
-  .msg.system {{ background: #fff3e0; }}
-  .msg.tool {{ background: #e8f5e9; }}
-  .role {{ font-weight: bold; font-size: 0.85em; margin-bottom: 4px; }}
-  .content {{ white-space: pre-wrap; font-size: 0.95em; }}
-  .time {{ color: #999; font-size: 0.75em; margin-top: 4px; }}
-  @media print {{ body {{ margin: 0; }} }}
-</style></head><body>
-<h1>📦 批量对话导出</h1>
-<div class="meta">共 {len(results)} 个对话 | 导出时间: {now}{' | 已脱敏' if mask_sensitive else ''}</div>"""]
+        # 1. 意图一致性
+        user_intents = [t.intent for t in turns if t.role == "user" and t.intent]
+        if user_intents:
+            intent_counts = defaultdict(int)
+            for intent in user_intents:
+                intent_counts[intent.intent] += 1
+            dominant = max(intent_counts, key=intent_counts.get)
+            consistency = intent_counts[dominant] / len(user_intents)
+            quality.intent_consistency = round(consistency * 100, 1)
+        else:
+            quality.intent_consistency = 50.0
 
-        for idx, (conv, messages) in enumerate(results, 1):
-            parts.append(f'<h2>{idx}. {conv.title or "无标题对话"}</h2>')
-            if include_metadata:
-                parts.append(
-                    f'<div class="meta">对话ID: {conv.id} | Agent: {conv.agent_id} | '
-                    f'用户: {conv.user_id} | 消息数: {len(messages)} | '
-                    f'创建: {conv.created_at}</div>'
-                )
-            for m in messages:
-                role_label = {"user": "👤 用户", "assistant": "🤖 AI", "system": "⚙️ 系统", "tool": "🔧 工具"}.get(m.role, m.role)
-                content = m.content or ""
-                if mask_sensitive:
-                    content = self._mask_text(content)
-                parts.append(f"""<div class="msg {m.role}">
-  <div class="role">{role_label}</div>
-  <div class="content">{content}</div>
-  <div class="time">{'Token: ' + str(m.total_tokens) if m.total_tokens else ''} | {m.created_at}</div>
-</div>""")
+        # 2. 话题连贯性
+        topic_distances = []
+        for i in range(1, len(turns)):
+            if turns[i].content and turns[i - 1].content:
+                kw1 = set(self._nlp._extract_keywords(turns[i - 1].content))
+                kw2 = set(self._nlp._extract_keywords(turns[i].content))
+                if kw1 and kw2:
+                    intersection = kw1 & kw2
+                    union = kw1 | kw2
+                    topic_distances.append(len(intersection) / max(len(union), 1))
+        if topic_distances:
+            avg_coherence = sum(topic_distances) / len(topic_distances)
+            quality.topic_coherence = round(avg_coherence * 100, 1)
+            if avg_coherence < 0.2:
+                issues.append("话题连贯性较低, 用户可能频繁切换话题")
+                suggestions.append("考虑总结之前的讨论要点, 保持话题聚焦")
+        else:
+            quality.topic_coherence = 50.0
 
-        parts.append("</body></html>")
-        return "\n".join(parts)
+        # 3. 共指消解覆盖
+        pronoun_turns = 0
+        resolved_turns = 0
+        for t in turns:
+            if t.role == "user" and t.content:
+                text_lower = t.content.lower()
+                has_pronouns = any(p in text_lower for p in ["它", "他", "她", "这个", "那个", "it", "this", "that", "they"])
+                if has_pronouns:
+                    pronoun_turns += 1
+        if pronoun_turns > 0:
+            quality.coreference_resolution = max(0, 100 - pronoun_turns * 10)
+        else:
+            quality.coreference_resolution = 100.0
+
+        # 4. 上下文完整度
+        total_turns = len(turns)
+        if total_turns < 3:
+            quality.context_completeness = total_turns * 20
+            suggestions.append("对话刚开始, 随着对话深入质量评估会更准确")
+        elif total_turns < 10:
+            quality.context_completeness = 60 + (total_turns - 3) * 5
+        else:
+            quality.context_completeness = min(100, 60 + total_turns)
+
+        # 综合评分
+        quality.overall_score = round(
+            quality.intent_consistency * 0.3
+            + quality.topic_coherence * 0.3
+            + quality.coreference_resolution * 0.2
+            + quality.context_completeness * 0.2,
+            1,
+        )
+
+        # 问题检测
+        if quality.intent_consistency < 50:
+            issues.append("意图频繁切换, 可能导致模型理解混乱")
+        if quality.topic_coherence < 30:
+            issues.append("话题频繁跳跃, 建议分多次对话处理不同主题")
+
+        quality.issues = issues
+        quality.suggestions = suggestions
+
+        return {
+            "overall_score": quality.overall_score,
+            "intent_consistency": quality.intent_consistency,
+            "topic_coherence": quality.topic_coherence,
+            "coreference_resolution": quality.coreference_resolution,
+            "context_completeness": quality.context_completeness,
+            "turns_analyzed": total_turns,
+            "issues": quality.issues,
+            "suggestions": quality.suggestions,
+        }
+
+    # ----------------------------------------------------------
+    # 完整增强管道
+    # ----------------------------------------------------------
+
+    async def enhance_message(
+        self, text: str, session_id: str = ""
+    ) -> dict:
+        """
+        完整对话增强管道:
+        1. 意图识别
+        2. 共指消解
+        3. 话题切换检测
+        4. 返回增强后的文本 + 元数据
+        """
+        # 1. 意图
+        intent = await self.detect_intent(text, session_id)
+
+        # 2. 共指消解
+        coref = await self.resolve_coreference(text, session_id)
+
+        # 3. 话题检测
+        topic = await self.detect_topic_switch(text, session_id)
+
+        # 4. 增强后的文本
+        enhanced_text = coref.get("resolved_text", text)
+
+        return {
+            "original_text": text,
+            "enhanced_text": enhanced_text,
+            "intent": intent,
+            "coreference": coref,
+            "topic_switch": topic,
+            "session_id": session_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # ----------------------------------------------------------
+    # 会话管理
+    # ----------------------------------------------------------
+
+    def clear_session(self, session_id: str):
+        """清除会话历史"""
+        if session_id in self._dialogue_history:
+            del self._dialogue_history[session_id]
+
+    def get_session_summary(self, session_id: str) -> dict:
+        """获取会话摘要"""
+        turns = self._dialogue_history.get(session_id, [])
+        if not turns:
+            return {"total_turns": 0}
+
+        intents = [t.intent.intent for t in turns if t.intent]
+        topics = [t.topic for t in turns if t.topic]
+        intent_dist = defaultdict(int)
+        for i in intents:
+            intent_dist[i] += 1
+
+        return {
+            "total_turns": len(turns),
+            "intent_distribution": dict(intent_dist),
+            "dominant_topic": max(set(topics), key=topics.count) if topics else "general",
+            "unique_topics": list(set(topics)),
+            "first_turn": turns[0].content[:100] if turns else "",
+            "last_turn": turns[-1].content[:100] if turns else "",
+        }
+
+    def list_sessions(self) -> list[dict]:
+        """列出活跃会话"""
+        return [
+            {"session_id": sid, "turns": len(turns)}
+            for sid, turns in self._dialogue_history.items()
+        ]
+
+    def _trim_history(self, session_id: str):
+        """裁剪历史"""
+        turns = self._dialogue_history.get(session_id, [])
+        if len(turns) > self._context_window * 2:
+            self._dialogue_history[session_id] = turns[-self._context_window * 2:]
+
+
+# 全局实例
+_dialogue_enhancement_service: Optional[DialogueEnhancementService] = None
+
+
+def get_dialogue_enhancement_service() -> DialogueEnhancementService:
+    global _dialogue_enhancement_service
+    if _dialogue_enhancement_service is None:
+        _dialogue_enhancement_service = DialogueEnhancementService()
+    return _dialogue_enhancement_service

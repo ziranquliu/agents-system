@@ -1865,3 +1865,281 @@ async def skill_combo_statistics():
     """统计"""
     from app.services.skill_combination_service import get_skill_combination_service
     return get_skill_combination_service().get_statistics()
+
+
+# ============================================================
+# 对话理解增强 (意图保持 / 共指消解 / 话题切换)
+# ============================================================
+
+class IntentRequest(BaseModel):
+    text: str = ""
+    session_id: str = ""
+
+
+class CoreferenceRequest(BaseModel):
+    text: str = ""
+    session_id: str = ""
+
+
+class TopicSwitchRequest(BaseModel):
+    text: str = ""
+    session_id: str = ""
+    threshold: float = 0.3
+
+
+class EnhanceMessageRequest(BaseModel):
+    text: str = ""
+    session_id: str = ""
+
+
+@router.post("/dialogue/intent")
+async def detect_intent(req: IntentRequest):
+    """意图识别"""
+    from app.services.dialogue_enhancement_service import get_dialogue_enhancement_service
+    return await get_dialogue_enhancement_service().detect_intent(req.text, req.session_id)
+
+
+@router.post("/dialogue/intent/batch")
+async def detect_intent_batch(texts: list[str] = []):
+    """批量意图识别"""
+    from app.services.dialogue_enhancement_service import get_dialogue_enhancement_service
+    return await get_dialogue_enhancement_service().detect_intent_batch(texts)
+
+
+@router.post("/dialogue/coreference")
+async def resolve_coreference(req: CoreferenceRequest):
+    """共指消解"""
+    from app.services.dialogue_enhancement_service import get_dialogue_enhancement_service
+    return await get_dialogue_enhancement_service().resolve_coreference(req.text, req.session_id)
+
+
+@router.post("/dialogue/topic-switch")
+async def detect_topic_switch(req: TopicSwitchRequest):
+    """话题切换检测"""
+    from app.services.dialogue_enhancement_service import get_dialogue_enhancement_service
+    return await get_dialogue_enhancement_service().detect_topic_switch(
+        req.text, req.session_id, req.threshold
+    )
+
+
+@router.post("/dialogue/enhance")
+async def enhance_message(req: EnhanceMessageRequest):
+    """完整对话增强管道 (意图 + 共指 + 话题)"""
+    from app.services.dialogue_enhancement_service import get_dialogue_enhancement_service
+    return await get_dialogue_enhancement_service().enhance_message(req.text, req.session_id)
+
+
+@router.get("/dialogue/quality/{session_id}")
+async def dialogue_quality(session_id: str):
+    """上下文质量评估"""
+    from app.services.dialogue_enhancement_service import get_dialogue_enhancement_service
+    return await get_dialogue_enhancement_service().evaluate_context_quality(session_id)
+
+
+@router.get("/dialogue/sessions")
+async def dialogue_sessions():
+    """列出活跃对话会话"""
+    from app.services.dialogue_enhancement_service import get_dialogue_enhancement_service
+    return get_dialogue_enhancement_service().list_sessions()
+
+
+@router.get("/dialogue/sessions/{session_id}/summary")
+async def dialogue_session_summary(session_id: str):
+    """会话摘要"""
+    from app.services.dialogue_enhancement_service import get_dialogue_enhancement_service
+    return get_dialogue_enhancement_service().get_session_summary(session_id)
+
+
+@router.delete("/dialogue/sessions/{session_id}")
+async def clear_dialogue_session(session_id: str):
+    """清除会话历史"""
+    from app.services.dialogue_enhancement_service import get_dialogue_enhancement_service
+    get_dialogue_enhancement_service().clear_session(session_id)
+    return {"cleared": True}
+
+
+# ============================================================
+# 多 Agent 会话路由 + 消息序列化
+# ============================================================
+
+class AgentRegisterRequest(BaseModel):
+    agent_id: str = ""
+    name: str = ""
+    capabilities: list[str] = []
+    max_concurrent: int = 10
+
+
+class AgentStatusUpdateRequest(BaseModel):
+    current_load: int = 0
+    queue_depth: int = 0
+    avg_response_time: float = 0
+    is_healthy: bool = True
+
+
+class RoutingRuleRequest(BaseModel):
+    id: str = ""
+    source_pattern: str = ""
+    target_agent: str = ""
+    strategy: str = "round_robin"
+    capability_required: str = ""
+    priority: int = 0
+
+
+class RouteMessageRequest(BaseModel):
+    session_id: str = ""
+    content: dict = {}
+    user_id: str = ""
+    strategy: str = ""
+    capability_required: str = ""
+    priority: int = 1
+
+
+class SendMessageRequest(BaseModel):
+    source_session: str = ""
+    target_session: str = ""
+    content: dict = {}
+    priority: int = 1
+    correlation_id: str = ""
+
+
+class SessionMigrateRequest(BaseModel):
+    session_id: str = ""
+    to_agent: str = ""
+    reason: str = ""
+
+
+@router.post("/routing/agents")
+async def register_routing_agent(req: AgentRegisterRequest):
+    """注册 Agent 端点"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return get_multi_agent_routing_service().register_agent(
+        req.agent_id, req.name, req.capabilities, req.max_concurrent
+    )
+
+
+@router.delete("/routing/agents/{agent_id}")
+async def unregister_routing_agent(agent_id: str):
+    """注销 Agent"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return get_multi_agent_routing_service().unregister_agent(agent_id)
+
+
+@router.put("/routing/agents/{agent_id}/status")
+async def update_agent_status(agent_id: str, req: AgentStatusUpdateRequest):
+    """更新 Agent 状态"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return get_multi_agent_routing_service().update_agent_status(
+        agent_id, req.current_load, req.queue_depth, req.avg_response_time, req.is_healthy
+    )
+
+
+@router.get("/routing/agents")
+async def list_routing_agents():
+    """列出所有 Agent"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return get_multi_agent_routing_service().list_agents()
+
+
+@router.post("/routing/agents/{agent_id}/migrate")
+async def migrate_session(session_id: str, to_agent: str, reason: str = ""):
+    """会话迁移"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return await get_multi_agent_routing_service().migrate_session(session_id, to_agent, reason)
+
+
+@router.get("/routing/migrations")
+async def migration_history(limit: int = 20):
+    """迁移历史"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return get_multi_agent_routing_service().get_migration_history(limit)
+
+
+@router.post("/routing/rules")
+async def add_routing_rule(req: RoutingRuleRequest):
+    """添加路由规则"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return get_multi_agent_routing_service().add_routing_rule(req.dict())
+
+
+@router.delete("/routing/rules/{rule_id}")
+async def remove_routing_rule(rule_id: str):
+    """删除路由规则"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return get_multi_agent_routing_service().remove_routing_rule(rule_id)
+
+
+@router.get("/routing/rules")
+async def list_routing_rules():
+    """列出路由规则"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return get_multi_agent_routing_service().list_routing_rules()
+
+
+@router.post("/routing/route")
+async def route_message(req: RouteMessageRequest):
+    """路由消息到最优 Agent"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return get_multi_agent_routing_service().route_message(
+        req.session_id, req.content, req.user_id, req.strategy,
+        req.capability_required, req.priority
+    )
+
+
+@router.post("/routing/messages")
+async def send_message(req: SendMessageRequest):
+    """发送序列化消息"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return await get_multi_agent_routing_service().send_message(
+        req.source_session, req.target_session, req.content,
+        req.priority, req.correlation_id
+    )
+
+
+@router.post("/routing/messages/{message_id}/process")
+async def process_message(message_id: str):
+    """确认消息已处理"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return await get_multi_agent_routing_service().process_message(message_id)
+
+
+@router.post("/routing/messages/{message_id}/fail")
+async def fail_message(message_id: str, error: str = ""):
+    """标记消息失败"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return await get_multi_agent_routing_service().fail_message(message_id, error)
+
+
+@router.get("/routing/messages/pending")
+async def pending_messages(limit: int = 50):
+    """待处理消息"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return get_multi_agent_routing_service().get_pending_messages(limit)
+
+
+@router.get("/routing/sequence")
+async def current_sequence():
+    """当前全局序列号"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return {"sequence": get_multi_agent_routing_service().get_sequence_number()}
+
+
+@router.get("/routing/sessions/{session_id}/agent")
+async def get_session_agent(session_id: str):
+    """获取会话绑定的 Agent"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    agent_id = get_multi_agent_routing_service().get_session_agent(session_id)
+    return {"session_id": session_id, "agent_id": agent_id}
+
+
+@router.get("/routing/agents/{agent_id}/sessions")
+async def get_agent_sessions(agent_id: str):
+    """获取 Agent 下的所有会话"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return {"agent_id": agent_id, "sessions": get_multi_agent_routing_service().get_agent_sessions(agent_id)}
+
+
+@router.get("/routing/statistics")
+async def routing_statistics():
+    """路由统计"""
+    from app.services.multi_agent_routing_service import get_multi_agent_routing_service
+    return get_multi_agent_routing_service().get_statistics()
