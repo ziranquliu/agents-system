@@ -8,7 +8,7 @@ from app.api.v1 import (
     conversation_enhancement, knowledge, tasks, system_monitor, 
     backup, backup_enhanced, memory, model_templates, batch_install, 
     skill_reuse, mcp_batch, dialogue_enhancement, monitoring, ops, 
-    health, audit, scheduler, tokens, workflows
+    health, audit, scheduler, tokens, workflows, advanced
 )
 
 api_router = APIRouter()
@@ -79,3 +79,6 @@ api_router.include_router(workflows.router, prefix="/api/v1/workflows", tags=["D
 
 # Chat
 api_router.include_router(chat.router, prefix="/api/v1/chat", tags=["对话补全"])
+
+# Advanced features (P0-P3)
+api_router.include_router(advanced.router, prefix="/api/v1/advanced", tags=["高级功能"])

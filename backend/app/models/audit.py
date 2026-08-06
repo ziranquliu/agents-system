@@ -3,6 +3,8 @@
 覆盖：审计日志（哈希链防篡改/追加写入/分区）、归档（冷热分离）、
 异常行为检测规则与告警、审计配置（保留期/SIEM/脱敏）
 """
+import hashlib
+import json
 import uuid
 from datetime import datetime
 
@@ -62,6 +64,24 @@ class AuditLog(Base):
     curr_hash = Column(String(64), nullable=True)  # 本条记录的 SHA-256
     verified = Column(Boolean, default=False)  # 写后读校验标记
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    def compute_hash(self) -> str:
+        """
+        计算本条记录的 SHA-256 哈希（防篡改哈希链）
+
+        哈希输入 = timestamp + operator_id + action_type + target_id + details_json + prev_hash
+        """
+        ts_str = self.timestamp.isoformat() if self.timestamp else ""
+        prev = self.prev_hash or ""
+        details_str = self.details or ""
+        raw = f"{ts_str}|{self.operator_id or ''}|{self.action_type or ''}|{self.target_id or ''}|{details_str}|{prev}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def verify_chain(self, prev_record_hash: str) -> bool:
+        """验证本条记录是否与前一条记录的哈希链一致"""
+        if self.prev_hash != prev_record_hash:
+            return False
+        return self.curr_hash == self.compute_hash()
 
 
 class AuditArchive(Base):
