@@ -2143,3 +2143,232 @@ async def routing_statistics():
     """路由统计"""
     from app.services.multi_agent_routing_service import get_multi_agent_routing_service
     return get_multi_agent_routing_service().get_statistics()
+
+
+# ============================================================
+# 向量存储 (Qdrant 真实集成)
+# ============================================================
+
+class VectorUpsertRequest(BaseModel):
+    collection: str = ""
+    point_id: str = ""
+    vector: list[float] = []
+    payload: dict = {}
+
+
+class VectorSearchRequest(BaseModel):
+    collection: str = ""
+    query_vector: list[float] = []
+    top_k: int = 10
+    score_threshold: float = 0.0
+    filter_payload: dict = {}
+    tenant_id: str = ""
+
+
+@router.get("/vector/health")
+async def vector_health():
+    """向量存储健康检查"""
+    from app.services.vector_store_service import get_vector_store_service
+    return get_vector_store_service().health_check()
+
+
+@router.post("/vector/collections")
+async def vector_create_collection(name: str = "", vector_size: int = 0):
+    """创建向量集合"""
+    from app.services.vector_store_service import get_vector_store_service
+    return get_vector_store_service().ensure_collection(name, vector_size)
+
+
+@router.get("/vector/collections")
+async def vector_list_collections():
+    """列出向量集合"""
+    from app.services.vector_store_service import get_vector_store_service
+    return get_vector_store_service().list_collections()
+
+
+@router.delete("/vector/collections/{name}")
+async def vector_delete_collection(name: str):
+    """删除向量集合"""
+    from app.services.vector_store_service import get_vector_store_service
+    return get_vector_store_service().delete_collection(name)
+
+
+@router.get("/vector/collections/{name}/info")
+async def vector_collection_info(name: str):
+    """获取集合信息"""
+    from app.services.vector_store_service import get_vector_store_service
+    return get_vector_store_service().get_collection_info(name)
+
+
+@router.post("/vector/upsert")
+async def vector_upsert(req: VectorUpsertRequest):
+    """插入/更新向量"""
+    from app.services.vector_store_service import get_vector_store_service
+    return get_vector_store_service().upsert(req.collection, req.point_id, req.vector, req.payload)
+
+
+@router.post("/vector/upsert-batch")
+async def vector_upsert_batch(collection: str = "", points: list[dict] = []):
+    """批量插入向量"""
+    from app.services.vector_store_service import get_vector_store_service
+    return get_vector_store_service().upsert_batch(collection, points)
+
+
+@router.post("/vector/search")
+async def vector_search(req: VectorSearchRequest):
+    """语义搜索"""
+    from app.services.vector_store_service import get_vector_store_service
+    result = get_vector_store_service().search(
+        req.collection, req.query_vector, req.top_k,
+        req.score_threshold, req.filter_payload, req.tenant_id,
+    )
+    return {
+        "total": result.total,
+        "search_time_ms": result.search_time_ms,
+        "backend": result.backend,
+        "points": [
+            {"id": p.id, "score": p.score, "payload": p.payload}
+            for p in result.points
+        ],
+    }
+
+
+@router.delete("/vector/points")
+async def vector_delete_points(collection: str = "", point_ids: list[str] = []):
+    """删除向量"""
+    from app.services.vector_store_service import get_vector_store_service
+    return get_vector_store_service().delete(collection, point_ids)
+
+
+# ============================================================
+# 记忆管理增强 (重要性遗忘/合并去重/追溯/词云/分布)
+# ============================================================
+
+class MemoryAutoForgetRequest(BaseModel):
+    memories: list[dict] = []
+    threshold: float = 0.0
+
+
+class MemoryMergeRequest(BaseModel):
+    memories: list[dict] = []
+    similarity_threshold: float = 0.95
+
+
+@router.post("/memory-enhance/auto-forget")
+async def memory_auto_forget(req: MemoryAutoForgetRequest):
+    """自动遗忘低重要性记忆"""
+    from app.services.memory_enhancement_service import get_memory_enhancement_service
+    return await get_memory_enhancement_service().auto_forget(req.memories, req.threshold)
+
+
+@router.post("/memory-enhance/merge-duplicates")
+async def memory_merge_duplicates(req: MemoryMergeRequest):
+    """合并与去重"""
+    from app.services.memory_enhancement_service import get_memory_enhancement_service
+    return await get_memory_enhancement_service().merge_duplicates(req.memories, req.similarity_threshold)
+
+
+@router.get("/memory-enhance/forgotten")
+async def memory_forgotten_records(
+    agent_id: str = "", reason: str = "", limit: int = 100
+):
+    """遗忘记录追溯"""
+    from app.services.memory_enhancement_service import get_memory_enhancement_service
+    return get_memory_enhancement_service().get_forgotten_records(agent_id, reason, limit)
+
+
+@router.post("/memory-enhance/restore/{memory_id}")
+async def memory_restore_forgotten(memory_id: str):
+    """恢复已遗忘的记忆"""
+    from app.services.memory_enhancement_service import get_memory_enhancement_service
+    return get_memory_enhancement_service().restore_forgotten(memory_id)
+
+
+@router.get("/memory-enhance/forget-stats")
+async def memory_forget_statistics():
+    """遗忘统计"""
+    from app.services.memory_enhancement_service import get_memory_enhancement_service
+    return get_memory_enhancement_service().get_forget_statistics()
+
+
+@router.post("/memory-enhance/word-cloud")
+async def memory_word_cloud(memories: list[dict] = [], max_words: int = 200):
+    """高频记忆词云"""
+    from app.services.memory_enhancement_service import get_memory_enhancement_service
+    return get_memory_enhancement_service().generate_word_cloud(memories, max_words)
+
+
+@router.post("/memory-enhance/type-distribution")
+async def memory_type_distribution(memories: list[dict] = []):
+    """记忆类型分布"""
+    from app.services.memory_enhancement_service import get_memory_enhancement_service
+    return get_memory_enhancement_service().get_type_distribution(memories)
+
+
+# ============================================================
+# RBAC 权限管理
+# ============================================================
+
+class UserRoleRequest(BaseModel):
+    user_id: str = ""
+    role: str = "viewer"
+
+
+@router.get("/rbac/roles")
+async def list_roles():
+    """列出角色"""
+    from app.core.unified_response import Role, ROLE_PERMISSIONS
+    return [
+        {"role": r.value, "permissions": len(ROLE_PERMISSIONS.get(r, set()))}
+        for r in Role
+    ]
+
+
+@router.get("/rbac/permissions")
+async def list_permissions():
+    """列出全部权限"""
+    from app.core.unified_response import Permission
+    return [{"permission": p.value, "category": p.value.split(":")[0]} for p in Permission]
+
+
+@router.get("/rbac/roles/{role}/permissions")
+async def role_permissions(role: str):
+    """获取角色权限"""
+    from app.core.unified_response import Role, ROLE_PERMISSIONS
+    try:
+        r = Role(role)
+    except ValueError:
+        raise HTTPException(404, "角色不存在")
+    perms = ROLE_PERMISSIONS.get(r, set())
+    return {"role": role, "permissions": [p.value for p in perms], "count": len(perms)}
+
+
+@router.post("/rbac/users/role")
+async def set_user_role(req: UserRoleRequest):
+    """设置用户角色"""
+    from app.core.unified_response import get_rbac_middleware
+    get_rbac_middleware().set_user_role(req.user_id, req.role)
+    return {"user_id": req.user_id, "role": req.role}
+
+
+@router.get("/rbac/users/{user_id}/permissions")
+async def user_permissions(user_id: str):
+    """获取用户权限"""
+    from app.core.unified_response import get_rbac_middleware
+    rbac = get_rbac_middleware()
+    role = rbac.get_user_role(user_id)
+    perms = rbac.get_user_permissions(user_id)
+    return {"user_id": user_id, "role": role, "permissions": [p.value for p in perms]}
+
+
+@router.post("/rbac/check")
+async def check_permission(user_id: str = "", permission: str = ""):
+    """检查权限"""
+    from app.core.unified_response import get_rbac_middleware, Permission
+    rbac = get_rbac_middleware()
+    try:
+        perm = Permission(permission)
+    except ValueError:
+        return {"allowed": False, "error": "无效权限标识"}
+    allowed = rbac.check_permission(user_id, perm)
+    return {"user_id": user_id, "permission": permission, "allowed": allowed}
