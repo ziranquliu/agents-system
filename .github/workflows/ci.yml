@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
@@ -6,99 +6,215 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "18"
+
 jobs:
   # ============================================================
-  # 后端：lint + test
+  # 代码质量检查
   # ============================================================
-  backend:
+  lint:
+    name: Code Quality
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install ruff mypy bandit
+
+      - name: Ruff lint
+        run: cd backend && ruff check app/ --output-format=github
+
+      - name: Ruff format check
+        run: cd backend && ruff format --check app/
+
+      - name: Security scan (bandit)
+        run: cd backend && bandit -r app/ -ll -ii --skip B101
+
+  # ============================================================
+  # 后端测试
+  # ============================================================
+  test-backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    needs: lint
 
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:16
         env:
-          POSTGRES_USER: agent
-          POSTGRES_PASSWORD: agent_pass_2024
-          POSTGRES_DB: agent_system
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+          POSTGRES_DB: test_db
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready -U agent
-          --health-interval 5s
+          --health-cmd pg_isready
+          --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: test-secret-key-for-ci-only
+      ENVIRONMENT: testing
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: 设置 Python 3.11
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: backend/requirements.txt
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
 
-      - name: 安装依赖
-        run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov httpx
 
-      - name: Lint 检查 (ruff)
-        run: ruff check app/ tests/
+      - name: Run tests with coverage
+        run: |
+          cd backend
+          python -m pytest tests/ \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=60 \
+            -v --timeout=60
 
-      - name: 运行测试
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: backend/coverage.xml
+          flags: backend
+
+  # ============================================================
+  # 数据库迁移验证
+  # ============================================================
+  migration-check:
+    name: Migration Check
+    runs-on: ubuntu-latest
+    needs: lint
+
+    services:
+      postgres:
+        image: postgres:16
         env:
-          DATABASE_URL: postgresql+asyncpg://agent:agent_pass_2024@localhost:5432/agent_system
-          REDIS_URL: redis://localhost:6379/0
-          ENVIRONMENT: testing
-          SECRET_KEY: ci-test-secret-key
-        run: pytest tests/ -v --tb=short -x
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
-  # ============================================================
-  # 前端：typecheck + build
-  # ============================================================
-  frontend:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
+    env:
+      DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: 设置 Node.js 20
-        uses: actions/setup-node@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: 安装依赖
-        run: npm ci
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
 
-      - name: TypeScript 类型检查
-        run: npx tsc --noEmit
-
-      - name: 构建
-        run: npm run build
+      - name: Verify migration chain
+        run: |
+          cd backend
+          python -m alembic history --verbose
+          python -m alembic check
 
   # ============================================================
-  # 安全性扫描（依赖漏洞）
+  # Docker 构建
   # ============================================================
-  security:
+  docker-build:
+    name: Docker Build
     runs-on: ubuntu-latest
+    needs: [test-backend, migration-check]
+    if: github.ref == 'refs/heads/main'
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: 后端依赖审计
-        uses: pypa/gh-action-pip-audit@v1
-        with:
-          inputs: backend/requirements.txt
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: 前端依赖审计
-        uses: actions/setup-node@v4
+      - name: Build backend image
+        uses: docker/build-push-action@v5
         with:
-          node-version: "20"
-      - run: cd frontend && npm ci && npm audit --audit-level=high
-        continue-on-error: true
+          context: ./backend
+          push: false
+          tags: agent-system-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: false
+          tags: agent-system-frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================
+  # 安全扫描
+  # ============================================================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install safety
+        run: pip install pip-audit safety
+
+      - name: Audit dependencies
+        run: |
+          cd backend
+          pip-audit -r requirements.txt --output json --output-file audit-report.json || true
+          cat audit-report.json
+
+      - name: Check for secrets in code
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified

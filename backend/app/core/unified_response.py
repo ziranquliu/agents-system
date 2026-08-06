@@ -15,8 +15,13 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Optional
 
-from fastapi import Request, Response
-from fastapi.responses import JSONResponse
+try:
+    from fastapi import Request, Response
+    from fastapi.responses import JSONResponse
+except ImportError:
+    Request = None
+    Response = None
+    JSONResponse = None
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +144,9 @@ class ErrorCode(Enum):
     CHECKSUM_MISMATCH = "10-003-01"
 
     # --- 系统/监控 (11-xxx) ---
-    SYSTEM_OVERLOADED = "11-001-01"
+    INTERNAL_ERROR = "11-001-01"
+    SERVICE_UNAVAILABLE = "11-001-02"
+    SYSTEM_OVERLOADED = "11-001-03"
     DATABASE_UNAVAILABLE = "11-002-01"
     REDIS_UNAVAILABLE = "11-002-02"
     QDRANT_UNAVAILABLE = "11-002-03"
@@ -159,19 +166,16 @@ class ErrorCode(Enum):
         module = int(self.value.split("-")[0])
         if self == ErrorCode.SUCCESS:
             return 200
-        if module <= 1:
-            return 401
-        if module == 1 and "PERMISSION" in self.name:
+        if "PERMISSION" in self.name:
             return 403
-        if module <= 13 and any(
-            kw in self.name
-            for kw in ["NOT_FOUND", "MISSING", "EXPIRED", "CONFLICT"]
-        ):
-            return 404
-        if "RATE_LIMIT" in self.name or "QUOTA_EXCEEDED" in self.name:
+        if "RATE_LIMIT" in self.name or "QUOTA_EXCEEDED" in self.name or "TOO_FREQUENT" in self.name:
             return 429
         if "PARAM_" in self.name:
             return 400
+        if module == 1:
+            return 401
+        if any(kw in self.name for kw in ["NOT_FOUND"]):
+            return 404
         return 500
 
     @property
@@ -377,7 +381,7 @@ ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
     Role.SUPER_ADMIN: set(Permission),  # 全部权限
     Role.ADMIN: {
         Permission.AGENT_VIEW, Permission.AGENT_CREATE, Permission.AGENT_UPDATE,
-        Permission.AGENT_DELETE, Permission.AGENT_START, Permission.AGENT_STOP,
+        Permission.AGENT_START, Permission.AGENT_STOP,
         Permission.AGENT_RESTART, Permission.AGENT_CONFIG,
         Permission.MODEL_VIEW, Permission.MODEL_CREATE, Permission.MODEL_UPDATE,
         Permission.MODEL_DELETE, Permission.MODEL_SWITCH,
@@ -587,12 +591,13 @@ def require_permission(permission: Permission):
                         request = arg
                         break
 
-            if request:
+            if request and Request:
                 user_id = getattr(request.state, "user_id", None)
                 if user_id:
                     rbac = get_rbac_middleware()
                     if not rbac.check_permission(user_id, permission):
-                        return JSONResponse(
+                        resp_cls = JSONResponse or dict
+                        return resp_cls(
                             status_code=403,
                             content=UnifiedResponse.error(
                                 ErrorCode.PERMISSION_DENIED,
@@ -616,7 +621,7 @@ def require_role(role: Role):
                         request = arg
                         break
 
-            if request:
+            if request and Request:
                 user_id = getattr(request.state, "user_id", None)
                 if user_id:
                     rbac = get_rbac_middleware()
@@ -634,7 +639,8 @@ def require_role(role: Role):
                         Role.VIEWER: 1,
                     }
                     if role_hierarchy.get(user_role_enum, 0) < role_hierarchy.get(role, 0):
-                        return JSONResponse(
+                        resp_cls = JSONResponse or dict
+                        return resp_cls(
                             status_code=403,
                             content=UnifiedResponse.error(
                                 ErrorCode.PERMISSION_DENIED,

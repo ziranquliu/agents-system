@@ -96,6 +96,55 @@ app.add_middleware(
 # 安全响应头
 app.add_middleware(SecurityHeadersMiddleware)
 
+
+# ============================================================
+# RBAC 权限中间件 + 统一响应格式
+# ============================================================
+class RBACAuthMiddleware(BaseHTTPMiddleware):
+    """RBAC 权限验证 + 统一响应 request_id 注入"""
+
+    async def dispatch(self, request: Request, call_next):
+        import uuid as _uuid
+        request_id = request.headers.get("X-Request-ID", _uuid.uuid4().hex[:12])
+        request.state.request_id = request_id
+
+        # 跳过公开路径
+        path = request.url.path
+        from app.core.unified_response import get_rbac_middleware, UnifiedResponse, ErrorCode
+        rbac = get_rbac_middleware()
+        if not rbac.is_public_path(path):
+            # 从 Authorization 头提取用户信息
+            auth_header = request.headers.get("Authorization", "")
+            user_id = ""
+            if auth_header.startswith("Bearer "):
+                try:
+                    from app.services.auth_service import decode_access_token
+                    payload = decode_access_token(auth_header[7:])
+                    user_id = payload.get("sub", "")
+                except Exception:
+                    pass
+            request.state.user_id = user_id
+            if user_id:
+                # 检查权限
+                required_perm = rbac.get_required_permission(request.method, path)
+                if required_perm and not rbac.check_permission(user_id, required_perm):
+                    from starlette.responses import JSONResponse
+                    return JSONResponse(
+                        status_code=403,
+                        content=UnifiedResponse.error(
+                            ErrorCode.PERMISSION_DENIED,
+                            f"需要权限: {required_perm.value}",
+                            request_id=request_id,
+                        ),
+                    )
+
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
+app.add_middleware(RBACAuthMiddleware)
+
 # 限流中间件（按配置启用；Redis 不可用时自动降级为放行）
 from app.core.ratelimit import RateLimitMiddleware, _get_redis
 
