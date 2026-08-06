@@ -186,7 +186,7 @@ class MCPSignatureService:
 
         # Nonce 防重放
         nonce_key = f"{key_id}:{nonce}:{timestamp}"
-        if nonce in self._used_nonces:
+        if nonce_key in self._used_nonces:
             self._log_verification(key_id, False, "nonce_reused")
             return VerificationResult(
                 valid=False, key_id=key_id, error="Nonce 重复使用 (重放攻击)",
