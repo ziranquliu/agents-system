@@ -359,3 +359,138 @@ async def backup_dashboard(
         "active_policies": policy_result.scalar() or 0,
         "encrypted_backups": enc_result.scalar() or 0,
     }
+
+
+# ----------------------------------------------------------
+# 远程备份 (MinIO/S3)
+# ----------------------------------------------------------
+
+@router.get("/remote/health", summary="远程存储健康检查")
+async def remote_health():
+    from app.services.remote_backup_service import get_remote_backup_service
+    svc = get_remote_backup_service()
+    return await svc.health_check()
+
+
+@router.post("/remote/sync/{backup_id}", summary="同步备份到远程存储")
+async def remote_sync(
+    backup_id: str,
+    session: AsyncSession = Depends(get_db),
+):
+    from app.services.remote_backup_service import get_remote_backup_service
+    from app.services.backup_enhanced_service import BackupEnhancedService
+    svc = get_remote_backup_service()
+    if not svc.is_configured:
+        raise HTTPException(400, "远程存储未配置(请设置 S3_ENDPOINT_URL 等环境变量)")
+
+    # 获取本地备份文件
+    backup = await BackupEnhancedService.get_backup(session, backup_id)
+    if not backup:
+        raise HTTPException(404, "备份记录不存在")
+    local_file = backup.file_path
+    import os
+    if not local_file or not os.path.exists(local_file):
+        raise HTTPException(404, "本地备份文件不存在")
+
+    result = await svc.sync_to_remote(
+        backup_id=backup_id,
+        local_file=local_file,
+        metadata={"scope": backup.scope.value if backup.scope else "", "type": backup.backup_type.value if backup.backup_type else ""},
+    )
+    return result
+
+
+@router.post("/remote/restore/{backup_id}", summary="从远程存储备份恢复")
+async def remote_restore(
+    backup_id: str,
+    data: dict = {},
+    session: AsyncSession = Depends(get_db),
+):
+    from app.services.remote_backup_service import get_remote_backup_service
+    svc = get_remote_backup_service()
+    if not svc.is_configured:
+        raise HTTPException(400, "远程存储未配置")
+
+    filename = data.get("filename", f"{backup_id}.enc")
+    result = await svc.restore_from_remote(backup_id, filename)
+    return result
+
+
+@router.get("/remote/list", summary="列出远程存储备份")
+async def remote_list(
+    prefix: str = Query("backups/"),
+):
+    from app.services.remote_backup_service import get_remote_backup_service
+    svc = get_remote_backup_service()
+    return await svc.list_remote_backups(prefix)
+
+
+@router.post("/remote/cleanup", summary="清理过期远程备份")
+async def remote_cleanup(
+    retention_days: int = Query(90, ge=7, le=365),
+):
+    from app.services.remote_backup_service import get_remote_backup_service
+    svc = get_remote_backup_service()
+    return await svc.cleanup_remote(retention_days)
+
+
+# ----------------------------------------------------------
+# YAML 自动部署
+# ----------------------------------------------------------
+
+@router.post("/yaml/apply", summary="应用 YAML 部署文件")
+async def yaml_apply(
+    data: dict,
+    session: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.services.yaml_deployment_service import YAMLDeploymentService, YAMLParseError
+    yaml_content = data.get("yaml", "")
+    if not yaml_content:
+        raise HTTPException(400, "yaml 字段不能为空")
+    try:
+        manifests = YAMLDeploymentService.parse_yaml(yaml_content)
+    except YAMLParseError as e:
+        raise HTTPException(400, str(e))
+
+    if not manifests:
+        raise HTTPException(400, "YAML 中未找到有效 manifest")
+
+    result = await YAMLDeploymentService.apply_manifests(session, manifests, str(current_user.id))
+    return result.to_dict()
+
+
+@router.post("/yaml/validate", summary="校验 YAML 文件")
+async def yaml_validate(data: dict):
+    from app.services.yaml_deployment_service import YAMLDeploymentService, YAMLParseError
+    yaml_content = data.get("yaml", "")
+    if not yaml_content:
+        raise HTTPException(400, "yaml 字段不能为空")
+    try:
+        manifests = YAMLDeploymentService.parse_yaml(yaml_content)
+    except YAMLParseError as e:
+        raise HTTPException(400, str(e))
+
+    validations = []
+    for m in manifests:
+        ok, msg = YAMLDeploymentService.validate_manifest(m)
+        validations.append({
+            "kind": m["kind"],
+            "name": m["metadata"]["name"],
+            "valid": ok,
+            "message": msg,
+        })
+    return {"valid": all(v["valid"] for v in validations), "manifests": validations}
+
+
+@router.get("/yaml/export/{kind}", summary="导出现有资源为 YAML")
+async def yaml_export(
+    kind: str,
+    item_id: Optional[str] = Query(None),
+    session: AsyncSession = Depends(get_db),
+):
+    from app.services.yaml_deployment_service import YAMLDeploymentService
+    if kind not in YAMLDeploymentService.SUPPORTED_KINDS:
+        raise HTTPException(400, f"不支持的 kind: {kind}")
+    yaml_output = await YAMLDeploymentService.export_to_yaml(session, kind, item_id)
+    return {"yaml": yaml_output}
