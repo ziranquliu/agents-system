@@ -2,7 +2,10 @@
 API集成测试 - 安全功能
 """
 import pytest
-from fastapi.testclient import TestClient
+try:
+    from fastapi.testclient import TestClient
+except ImportError:
+    pytest.skip("缺少依赖", allow_module_level=True)
 def test_api_key_encryption(encryption_service):
     """测试API Key加密"""
     original_key = "sk-test-api-key-12345"

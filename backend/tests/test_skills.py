@@ -1,5 +1,9 @@
 """技能 API 测试"""
 import pytest
+try:
+    from fastapi.testclient import TestClient
+except ImportError:
+    pytest.skip("缺少依赖", allow_module_level=True)
 
 
 class TestSkills:

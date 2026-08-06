@@ -1,5 +1,9 @@
 """对话和消息 API 测试"""
 import pytest
+try:
+    from fastapi.testclient import TestClient
+except (ImportError, ModuleNotFoundError):
+    pytest.skip("缺少依赖", allow_module_level=True)
 
 
 class TestConversations:

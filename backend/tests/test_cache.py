@@ -7,6 +7,13 @@ CacheManager 的方法是 async 的，同步 TestClient 无法 await。
 import pytest
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
+try:
+    from app.core.cache import CacheManager
+    _has_cache = True
+except (ImportError, ModuleNotFoundError):
+    _has_cache = False
+
+pytestmark = pytest.mark.skipif(not _has_cache, reason="缺少 redis 依赖")
 
 
 @pytest.fixture

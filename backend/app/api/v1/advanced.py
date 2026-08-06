@@ -2372,3 +2372,145 @@ async def check_permission(user_id: str = "", permission: str = ""):
         return {"allowed": False, "error": "无效权限标识"}
     allowed = rbac.check_permission(user_id, perm)
     return {"user_id": user_id, "permission": permission, "allowed": allowed}
+
+
+# ============================================================
+# AES-256-GCM 加密
+# ============================================================
+
+class AESKeyRequest(BaseModel):
+    key_id: str = ""
+    description: str = ""
+
+
+class AESPasswordKeyRequest(BaseModel):
+    password: str = ""
+    salt_hex: str = ""
+    key_id: str = ""
+
+
+class AESEncryptRequest(BaseModel):
+    plaintext_hex: str = ""
+    key_id: str = ""
+    aad: str = ""
+
+
+class AESDecryptRequest(BaseModel):
+    ciphertext_hex: str = ""
+    nonce_hex: str = ""
+    tag_hex: str = ""
+    key_id: str = ""
+    aad: str = ""
+
+
+class AESEnvelopeRequest(BaseModel):
+    data: dict = {}
+    kek_key_id: str = ""
+
+
+@router.post("/encryption/keys")
+async def aes_generate_key(req: AESKeyRequest):
+    """生成 AES-256-GCM 密钥"""
+    from app.services.aes_gcm_service import get_aes_gcm_service
+    return get_aes_gcm_service().generate_key(req.key_id, req.description)
+
+
+@router.post("/encryption/keys/derive")
+async def aes_derive_key(req: AESPasswordKeyRequest):
+    """从密码派生密钥 (PBKDF2)"""
+    from app.services.aes_gcm_service import get_aes_gcm_service
+    salt = bytes.fromhex(req.salt_hex) if req.salt_hex else b""
+    return get_aes_gcm_service().derive_key_from_password(req.password, salt, req.key_id)
+
+
+@router.get("/encryption/keys")
+async def aes_list_keys():
+    """列出密钥"""
+    from app.services.aes_gcm_service import get_aes_gcm_service
+    return get_aes_gcm_service().list_keys()
+
+
+@router.post("/encryption/keys/current")
+async def aes_set_current_key(key_id: str = ""):
+    """设置当前密钥"""
+    from app.services.aes_gcm_service import get_aes_gcm_service
+    return get_aes_gcm_service().set_current_key(key_id)
+
+
+@router.post("/encryption/keys/{key_id}/revoke")
+async def aes_revoke_key(key_id: str):
+    """吊销密钥"""
+    from app.services.aes_gcm_service import get_aes_gcm_service
+    return get_aes_gcm_service().revoke_key(key_id)
+
+
+@router.post("/encryption/keys/rotate")
+async def aes_rotate_key(old_key_id: str = ""):
+    """轮换密钥"""
+    from app.services.aes_gcm_service import get_aes_gcm_service
+    return get_aes_gcm_service().rotate_key(old_key_id)
+
+
+@router.post("/encryption/encrypt")
+async def aes_encrypt(req: AESEncryptRequest):
+    """加密数据"""
+    from app.services.aes_gcm_service import get_aes_gcm_service
+    plaintext = bytes.fromhex(req.plaintext_hex)
+    return get_aes_gcm_service().encrypt(plaintext, req.key_id, req.aad)
+
+
+@router.post("/encryption/decrypt")
+async def aes_decrypt(req: AESDecryptRequest):
+    """解密数据"""
+    from app.services.aes_gcm_service import get_aes_gcm_service
+    encrypted = {
+        "ciphertext": req.ciphertext_hex,
+        "nonce": req.nonce_hex,
+        "tag": req.tag_hex,
+        "key_version": req.key_id,
+        "aad": req.aad,
+    }
+    plaintext = get_aes_gcm_service().decrypt(encrypted)
+    return {"plaintext_hex": plaintext.hex(), "plaintext_length": len(plaintext)}
+
+
+@router.post("/encryption/encrypt-json")
+async def aes_encrypt_json(data: dict = {}, key_id: str = "", aad: str = ""):
+    """加密 JSON"""
+    from app.services.aes_gcm_service import get_aes_gcm_service
+    return get_aes_gcm_service().encrypt_json(data, key_id, aad)
+
+
+@router.post("/encryption/decrypt-json")
+async def aes_decrypt_json(encrypted: dict = {}):
+    """解密 JSON"""
+    from app.services.aes_gcm_service import get_aes_gcm_service
+    return get_aes_gcm_service().decrypt_json(encrypted)
+
+
+@router.post("/encryption/envelope")
+async def aes_create_envelope(req: AESEnvelopeRequest):
+    """信封加密"""
+    from app.services.aes_gcm_service import get_aes_gcm_service
+    result = get_aes_gcm_service().create_envelope(req.data, kek_key_id=req.kek_key_id)
+    # 序列化 bytes
+    for k in ["encrypted_data", "encrypted_dek"]:
+        if k in result and isinstance(result[k], dict):
+            for sub_key, val in result[k].items():
+                if isinstance(val, bytes):
+                    result[k][sub_key] = val.hex()
+    return result
+
+
+@router.post("/encryption/envelope/open")
+async def aes_open_envelope(envelope: dict = {}):
+    """打开信封"""
+    from app.services.aes_gcm_service import get_aes_gcm_service
+    return get_aes_gcm_service().open_envelope(envelope)
+
+
+@router.get("/encryption/stats")
+async def aes_stats():
+    """加密统计"""
+    from app.services.aes_gcm_service import get_aes_gcm_service
+    return get_aes_gcm_service().stats()
