@@ -302,6 +302,70 @@ class AuditService:
         return buffer.getvalue()
 
     @staticmethod
+    async def export_pdf(session: AsyncSession, filters: Dict[str, Any]) -> bytes:
+        """PDF 导出（审计报告格式）"""
+        try:
+            from reportlab.lib import colors
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import cm, mm
+            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+        except ImportError:
+            raise RuntimeError("reportlab 未安装。请运行: pip install reportlab")
+
+        data = await AuditService.query(session, page=1, page_size=10000, **filters)
+        records = data["items"]
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), leftMargin=1*cm, rightMargin=1*cm, topMargin=1.5*cm, bottomMargin=1.5*cm)
+        styles = getSampleStyleSheet()
+        elements = []
+
+        # 标题
+        title_style = ParagraphStyle("TitleCN", parent=styles["Title"], fontSize=16, spaceAfter=12)
+        elements.append(Paragraph("Audit Report", title_style))
+
+        # 摘要
+        summary_style = ParagraphStyle("Summary", parent=styles["Normal"], fontSize=10, spaceAfter=8)
+        total = data.get("total", 0)
+        elements.append(Paragraph(f"Total Records: {total}", summary_style))
+        elements.append(Paragraph(f"Generated: {datetime.utcnow().isoformat()}", summary_style))
+        elements.append(Spacer(1, 0.5*cm))
+
+        # 表格
+        headers = ["Time", "Operator", "Category", "Action", "Target", "Result", "Verified"]
+        table_data = [headers]
+        for r in records:
+            table_data.append([
+                Paragraph(r.timestamp.strftime("%Y-%m-%d %H:%M") if r.timestamp else "", styles["Normal"]),
+                Paragraph(str(r.operator_id or "")[:16], styles["Normal"]),
+                Paragraph(str(r.category or "")[:20], styles["Normal"]),
+                Paragraph(str(r.action_type or "")[:20], styles["Normal"]),
+                Paragraph(str(r.target_id or "")[:16], styles["Normal"]),
+                Paragraph(str(r.result or "")[:10], styles["Normal"]),
+                Paragraph("Yes" if r.verified else "No", styles["Normal"]),
+            ])
+
+        col_widths = [3.5*cm, 3*cm, 3*cm, 3*cm, 3*cm, 2*cm, 2*cm]
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, 0), 9),
+            ("FONTSIZE", (0, 1), (-1, -1), 8),
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#ecf0f1")]),
+        ]))
+        elements.append(table)
+
+        doc.build(elements)
+        return buffer.getvalue()
+
+    @staticmethod
     async def get_config(session: AsyncSession) -> Optional[AuditConfig]:
         result = await session.execute(select(AuditConfig).limit(1))
         return result.scalars().first()
