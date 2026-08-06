@@ -727,3 +727,305 @@ async def get_recent_spans(limit: int = 100):
 async def get_trace(trace_id: str):
     from app.core.tracing import get_tracer
     return get_tracer().get_trace(trace_id)
+
+
+# ============================================================
+# 16. 敏感字段脱敏
+# ============================================================
+
+_masking_service = None
+
+def get_masking_service():
+    global _masking_service
+    if _masking_service is None:
+        from app.services.data_masking_service import DataMaskingService
+        _masking_service = DataMaskingService()
+    return _masking_service
+
+
+@router.post("/masking/mask")
+async def mask_data(value: str, field_name: str = ""):
+    svc = get_masking_service()
+    return {"original": value, "masked": svc.mask(value)}
+
+
+@router.post("/masking/mask-dict")
+async def mask_dict_data(data: dict):
+    svc = get_masking_service()
+    return {"masked": svc.mask_dict(data)}
+
+
+@router.get("/masking/rules")
+async def list_masking_rules():
+    return get_masking_service().list_rules()
+
+
+@router.post("/masking/configure-audit")
+async def configure_audit_masking():
+    get_masking_service().configure_for_audit()
+    return {"status": "ok"}
+
+
+# ============================================================
+# 17. 异常行为检测
+# ============================================================
+
+_anomaly_service = None
+
+def get_anomaly_service():
+    global _anomaly_service
+    if _anomaly_service is None:
+        from app.services.anomaly_detection_service import AnomalyDetectionService
+        _anomaly_service = AnomalyDetectionService()
+    return _anomaly_service
+
+
+@router.post("/anomaly/ingest")
+async def ingest_anomaly_event(event: dict):
+    alerts = get_anomaly_service().ingest_event(event)
+    return {
+        "alerts_triggered": len(alerts),
+        "alerts": [{"rule": a.rule_name, "severity": a.severity, "desc": a.description} for a in alerts],
+    }
+
+
+@router.get("/anomaly/alerts")
+async def get_anomaly_alerts(severity: str = "", limit: int = 50):
+    return get_anomaly_service().get_alerts(severity=severity or None, limit=limit)
+
+
+@router.get("/anomaly/rules")
+async def list_anomaly_rules():
+    return get_anomaly_service().list_rules()
+
+
+@router.get("/anomaly/stats")
+async def get_anomaly_stats():
+    return get_anomaly_service().get_stats()
+
+
+# ============================================================
+# 18. SIEM 集成
+# ============================================================
+
+_siem_service = None
+
+def get_siem_service():
+    global _siem_service
+    if _siem_service is None:
+        from app.services.siem_service import SIEMService
+        _siem_service = SIEMService()
+    return _siem_service
+
+
+@router.post("/siem/send")
+async def send_to_siem(record: dict):
+    svc = get_siem_service()
+    await svc.send_audit_record(record)
+    return {"status": "ok"}
+
+
+@router.get("/siem/health")
+async def siem_health():
+    return await get_siem_service().health_check()
+
+
+@router.get("/siem/stats")
+async def siem_stats():
+    return get_siem_service().get_stats()
+
+
+# ============================================================
+# 19. SSE 实时推送
+# ============================================================
+
+_sse_service = None
+
+def get_sse_service():
+    global _sse_service
+    if _sse_service is None:
+        from app.services.sse_service import SSEService
+        _sse_service = SSEService()
+    return _sse_service
+
+
+@router.get("/sse/connect")
+async def sse_connect(client_id: str, user_id: str = "", channels: str = "system"):
+    svc = get_sse_service()
+    ch_list = [c.strip() for c in channels.split(",")]
+    svc.connect(client_id, user_id, ch_list)
+    return {"status": "connected", "client_id": client_id}
+
+
+@router.post("/sse/publish")
+async def sse_publish(channel: str, event_type: str, data: dict):
+    await get_sse_service().publish(channel, event_type, data)
+    return {"status": "ok"}
+
+
+@router.get("/sse/stats")
+async def sse_stats():
+    return get_sse_service().get_stats()
+
+
+# ============================================================
+# 20. 模型推荐矩阵
+# ============================================================
+
+_recommendation_service = None
+
+def get_recommendation_service():
+    global _recommendation_service
+    if _recommendation_service is None:
+        from app.services.model_recommendation_service import ModelRecommendationService
+        _recommendation_service = ModelRecommendationService()
+    return _recommendation_service
+
+
+@router.get("/model-recommend/matrix")
+async def get_model_matrix():
+    return get_recommendation_service().get_matrix()
+
+
+@router.get("/model-recommend/scenarios")
+async def recommend_by_scenario(
+    scenario: str = "simple_qa",
+    priority: str = "balanced",
+    context_tokens: int = 0,
+    multimodal: bool = False,
+    function_calling: bool = False,
+):
+    from app.services.model_recommendation_service import ScenarioType, PriorityDimension
+    rec = get_recommendation_service().recommend(
+        scenario=ScenarioType(scenario),
+        priority=PriorityDimension(priority),
+        required_context_tokens=context_tokens,
+        requires_multimodal=multimodal,
+        requires_function_calling=function_calling,
+    )
+    return rec.to_dict()
+
+
+@router.get("/model-recommend/profiles")
+async def list_model_profiles():
+    return get_recommendation_service().list_profiles()
+
+
+# ============================================================
+# 21. 优化效果评估
+# ============================================================
+
+_eval_service = None
+
+def get_eval_service():
+    global _eval_service
+    if _eval_service is None:
+        from app.services.optimization_eval_service import OptimizationEvalService
+        _eval_service = OptimizationEvalService()
+    return _eval_service
+
+
+@router.post("/optimization-eval/baseline")
+async def set_eval_baseline(data: dict):
+    get_eval_service().set_baseline(data=data)
+    return {"status": "ok"}
+
+
+@router.post("/optimization-eval/current")
+async def record_eval_current(data: dict):
+    get_eval_service().record_current(data=data)
+    return {"status": "ok"}
+
+
+@router.get("/optimization-eval/evaluate")
+async def evaluate_optimization(period: str = "monthly"):
+    report = get_eval_service().evaluate(period)
+    return report.to_dict()
+
+
+@router.get("/optimization-eval/latest")
+async def get_latest_eval():
+    result = get_eval_service().get_latest()
+    return result or {"message": "No reports yet"}
+
+
+# ============================================================
+# 22. 角色模板 + 专长注册
+# ============================================================
+
+_role_service = None
+
+def get_role_service():
+    global _role_service
+    if _role_service is None:
+        from app.services.role_master_service import RoleMasterService
+        _role_service = RoleMasterService()
+    return _role_service
+
+
+@router.get("/roles/templates")
+async def list_role_templates():
+    return get_role_service().list_templates()
+
+
+@router.post("/roles/templates")
+async def create_role_template(data: dict):
+    from app.services.role_master_service import RoleTemplate
+    tpl = get_role_service().create_template(**data)
+    return {"id": tpl.id, "name": tpl.name}
+
+
+@router.get("/roles/templates/{template_id}")
+async def get_role_template(template_id: str):
+    result = get_role_service().get_template(template_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return result
+
+
+@router.post("/roles/experts/register")
+async def register_expert(data: dict):
+    entry = get_role_service().register_expertise(**data)
+    return {"agent_id": entry.agent_id, "domains": entry.domains}
+
+
+@router.get("/roles/experts")
+async def list_experts():
+    return get_role_service().list_experts()
+
+
+@router.get("/roles/recommend")
+async def recommend_agents_for_role(
+    domains: str = "",
+    skills: str = "",
+    role: str = "",
+    limit: int = 5,
+):
+    domain_list = [d.strip() for d in domains.split(",") if d.strip()] if domains else None
+    skill_list = [s.strip() for s in skills.split(",") if s.strip()] if skills else None
+    return get_role_service().recommend_agents(
+        required_domains=domain_list,
+        required_skills=skill_list,
+        role_name=role,
+        limit=limit,
+    )
+
+
+@router.post("/roles/assign")
+async def assign_role(agent_id: str, role_name: str, task_id: str = ""):
+    return get_role_service().assign_role(agent_id, role_name, task_id)
+
+
+@router.post("/roles/release")
+async def release_role(agent_id: str):
+    return {"released": get_role_service().release_role(agent_id)}
+
+
+@router.get("/roles/assignments")
+async def get_assignments(agent_id: str = "", limit: int = 50):
+    return get_role_service().get_assignments(agent_id=agent_id or None, limit=limit)
+
+
+@router.get("/roles/domain-matrix")
+async def get_domain_matrix():
+    return get_role_service().get_domain_matrix()

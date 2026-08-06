@@ -47,6 +47,7 @@ from app.models.token import (  # noqa: F401
 from app.models.update_enhanced import UpdateSnapshot, UpdateLog  # noqa: F401
 from app.models.notification import NotificationConfig, NotifyMethod  # noqa: F401
 from app.models.event_log import EventLog, DeadLetterQueue  # noqa: F401
+from app.models.audit_enhanced import AuditLogPartitioned, AuditArchive  # noqa: F401
 
 __all__ = [
     "Base",
@@ -80,4 +81,5 @@ __all__ = [
     "UpdateSnapshot", "UpdateLog",
     "NotificationConfig", "NotifyMethod",
     "EventLog", "DeadLetterQueue",
+    "AuditLogPartitioned", "AuditArchive",
 ]
