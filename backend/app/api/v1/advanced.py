@@ -1029,3 +1029,839 @@ async def get_assignments(agent_id: str = "", limit: int = 50):
 @router.get("/roles/domain-matrix")
 async def get_domain_matrix():
     return get_role_service().get_domain_matrix()
+
+
+# ============================================================
+# MCP 批量合并 + 模板 (Phase 9)
+# ============================================================
+
+class MCPBatchRequest(BaseModel):
+    tool_name: str = ""
+    requests: list[dict] = []
+    timeout: float = 30
+
+
+class MCPTemplateInstallRequest(BaseModel):
+    template_id: str = ""
+    custom_config: dict = {}
+    server_name: str = ""
+
+
+@router.post("/mcp/batch/merge")
+async def mcp_batch_merge(req: MCPBatchRequest):
+    """批量合并 MCP 请求"""
+    from app.services.mcp_batch_merge_service import get_mcp_batch_merge_service
+    svc = get_mcp_batch_merge_service()
+    return await svc.execute_batch(
+        tool_name=req.tool_name,
+        requests=req.requests,
+        timeout=req.timeout,
+    )
+
+
+@router.post("/mcp/batch/compress")
+async def mcp_batch_compress(data: dict):
+    """gzip 压缩数据"""
+    from app.services.mcp_batch_merge_service import get_mcp_batch_merge_service
+    svc = get_mcp_batch_merge_service()
+    import gzip, json as _j
+    raw = _j.dumps(data, ensure_ascii=False).encode("utf-8")
+    compressed = svc.compress(raw)
+    return {
+        "original_size": len(raw),
+        "compressed_size": len(compressed),
+        "ratio": round(len(compressed) / max(len(raw), 1), 3),
+    }
+
+
+@router.get("/mcp/templates")
+async def list_mcp_templates():
+    """列出 MCP 模板"""
+    from app.services.mcp_template_service import get_mcp_template_service
+    return get_mcp_template_service().list_templates()
+
+
+@router.get("/mcp/templates/{template_id}")
+async def get_mcp_template(template_id: str):
+    """获取 MCP 模板详情"""
+    from app.services.mcp_template_service import get_mcp_template_service
+    t = get_mcp_template_service().get_template(template_id)
+    if not t:
+        raise HTTPException(404, "模板不存在")
+    return t
+
+
+@router.post("/mcp/templates/install")
+async def install_mcp_template(req: MCPTemplateInstallRequest):
+    """一键安装 MCP 模板"""
+    from app.services.mcp_template_service import get_mcp_template_service
+    return get_mcp_template_service().install_template(
+        req.template_id, req.custom_config, req.server_name
+    )
+
+
+@router.get("/mcp/templates/installed")
+async def list_installed_mcp():
+    """列出已安装 MCP"""
+    from app.services.mcp_template_service import get_mcp_template_service
+    return get_mcp_template_service().list_installed()
+
+
+# ============================================================
+# MCP 请求签名 (HMAC)
+# ============================================================
+
+class MCPKeyCreateRequest(BaseModel):
+    key_id: str = ""
+    secret: str = ""
+    description: str = ""
+    ttl_seconds: int = 86400 * 90
+
+
+class MCPSignRequest(BaseModel):
+    key_id: str = ""
+    request_body: dict = {}
+    nonce: str = ""
+
+
+class MCPVerifyRequest(BaseModel):
+    key_id: str = ""
+    signature: str = ""
+    timestamp: float = 0
+    nonce: str = ""
+    request_body: dict = {}
+
+
+@router.post("/mcp/signature/keys")
+async def create_signature_key(req: MCPKeyCreateRequest):
+    """创建签名密钥"""
+    from app.services.mcp_signature_service import get_mcp_signature_service
+    return get_mcp_signature_service().create_key(
+        req.key_id, req.secret, req.description, req.ttl_seconds
+    )
+
+
+@router.get("/mcp/signature/keys")
+async def list_signature_keys():
+    """列出签名密钥"""
+    from app.services.mcp_signature_service import get_mcp_signature_service
+    return get_mcp_signature_service().list_keys()
+
+
+@router.post("/mcp/signature/keys/{key_id}/revoke")
+async def revoke_signature_key(key_id: str):
+    """吊销密钥"""
+    from app.services.mcp_signature_service import get_mcp_signature_service
+    return get_mcp_signature_service().revoke_key(key_id)
+
+
+@router.post("/mcp/signature/keys/rotate")
+async def rotate_signature_key(old_key_id: str, new_key_id: str, new_secret: str):
+    """轮换密钥"""
+    from app.services.mcp_signature_service import get_mcp_signature_service
+    return get_mcp_signature_service().rotate_key(old_key_id, new_key_id, new_secret)
+
+
+@router.post("/mcp/signature/sign")
+async def sign_request(req: MCPSignRequest):
+    """生成签名"""
+    from app.services.mcp_signature_service import get_mcp_signature_service
+    result = get_mcp_signature_service().sign(req.key_id, req.request_body, req.nonce)
+    return {"key_id": result.key_id, "signature": result.signature, "timestamp": result.timestamp, "nonce": result.nonce}
+
+
+@router.post("/mcp/signature/sign-headers")
+async def sign_headers(req: MCPSignRequest):
+    """生成签名 HTTP 头"""
+    from app.services.mcp_signature_service import get_mcp_signature_service
+    return get_mcp_signature_service().sign_headers(req.key_id, req.request_body, req.nonce)
+
+
+@router.post("/mcp/signature/verify")
+async def verify_signature(req: MCPVerifyRequest):
+    """验证签名"""
+    from app.services.mcp_signature_service import get_mcp_signature_service
+    result = get_mcp_signature_service().verify(
+        req.key_id, req.signature, req.timestamp, req.nonce, req.request_body
+    )
+    return {"valid": result.valid, "key_id": result.key_id, "error": result.error}
+
+
+@router.get("/mcp/signature/log")
+async def signature_verification_log(limit: int = 100):
+    """签名验证日志"""
+    from app.services.mcp_signature_service import get_mcp_signature_service
+    return get_mcp_signature_service().get_verification_log(limit)
+
+
+# ============================================================
+# WebSocket 实时监控
+# ============================================================
+
+class WSConnectRequest(BaseModel):
+    client_id: str = ""
+    channels: list[str] = ["system"]
+    metadata: dict = {}
+
+
+@router.post("/ws-monitor/connect")
+async def ws_monitor_connect(req: WSConnectRequest):
+    """注册 WebSocket 监控客户端"""
+    from app.services.websocket_monitor_service import get_ws_monitor_service
+    return await get_ws_monitor_service().connect(req.client_id, req.channels, req.metadata)
+
+
+@router.post("/ws-monitor/disconnect")
+async def ws_monitor_disconnect(client_id: str):
+    """断开监控客户端"""
+    from app.services.websocket_monitor_service import get_ws_monitor_service
+    await get_ws_monitor_service().disconnect(client_id)
+    return {"disconnected": True}
+
+
+@router.post("/ws-monitor/heartbeat")
+async def ws_monitor_heartbeat(client_id: str):
+    """心跳"""
+    from app.services.websocket_monitor_service import get_ws_monitor_service
+    ok = await get_ws_monitor_service().heartbeat(client_id)
+    return {"ok": ok}
+
+
+@router.post("/ws-monitor/publish")
+async def ws_monitor_publish(channel: str, event_type: str, data: dict = {}):
+    """发布事件到监控通道"""
+    from app.services.websocket_monitor_service import get_ws_monitor_service
+    await get_ws_monitor_service().publish(channel, event_type, data)
+    return {"published": True}
+
+
+@router.get("/ws-monitor/metrics")
+async def ws_monitor_current_metrics():
+    """获取最新指标"""
+    from app.services.websocket_monitor_service import get_ws_monitor_service
+    return await get_ws_monitor_service().get_current_metrics() or {"message": "无数据"}
+
+
+@router.get("/ws-monitor/metrics/history")
+async def ws_monitor_metrics_history(duration_seconds: int = 300):
+    """获取历史指标"""
+    from app.services.websocket_monitor_service import get_ws_monitor_service
+    return await get_ws_monitor_service().get_metrics_history(duration_seconds)
+
+
+@router.get("/ws-monitor/events")
+async def ws_monitor_events(channel: str = "", event_type: str = "", limit: int = 100):
+    """查询事件历史"""
+    from app.services.websocket_monitor_service import get_ws_monitor_service
+    return get_ws_monitor_service().get_event_history(channel, event_type, limit)
+
+
+@router.get("/ws-monitor/clients")
+async def ws_monitor_clients():
+    """获取客户端列表"""
+    from app.services.websocket_monitor_service import get_ws_monitor_service
+    svc = get_ws_monitor_service()
+    return {"total": svc.get_client_count()}
+
+
+# ============================================================
+# Agent 下钻分析
+# ============================================================
+
+@router.get("/agent-drilldown/{agent_id}")
+async def agent_drilldown(
+    agent_id: str,
+    time_range_start: str = "",
+    time_range_end: str = "",
+):
+    """单 Agent 下钻分析"""
+    from app.services.agent_drilldown_service import get_drilldown_service
+    return get_drilldown_service().drilldown(
+        agent_id,
+        time_range_start=time_range_start or None,
+        time_range_end=time_range_end or None,
+    )
+
+
+@router.post("/agent-drilldown/{agent_id}/record")
+async def record_drilldown_request(
+    agent_id: str,
+    response_time: float = 0,
+    tokens_used: int = 0,
+    cost_usd: float = 0,
+    success: bool = True,
+    user_satisfaction: float = 0,
+):
+    """记录请求数据用于下钻分析"""
+    from app.services.agent_drilldown_service import get_drilldown_service
+    get_drilldown_service().record_request(
+        agent_id, response_time, tokens_used, cost_usd, success, user_satisfaction
+    )
+    return {"recorded": True}
+
+
+# ============================================================
+# 自定义拖拽仪表盘
+# ============================================================
+
+class DashboardCreateRequest(BaseModel):
+    name: str = ""
+    description: str = ""
+    owner_id: str = ""
+    template_id: str = ""
+    is_public: bool = False
+    tags: list[str] = []
+
+
+class WidgetAddRequest(BaseModel):
+    widget_type: str = "metric"
+    title: str = ""
+    data_source: str = ""
+    query: dict = {}
+    position: dict = {}
+    config: dict = {}
+
+
+@router.post("/dashboards")
+async def create_dashboard(req: DashboardCreateRequest):
+    """创建仪表盘"""
+    from app.services.dashboard_service import get_dashboard_service
+    return get_dashboard_service().create_dashboard(
+        req.name, req.owner_id, req.description, req.template_id, req.is_public, req.tags
+    )
+
+
+@router.get("/dashboards")
+async def list_dashboards(owner_id: str = "", limit: int = 50):
+    """列出仪表盘"""
+    from app.services.dashboard_service import get_dashboard_service
+    return get_dashboard_service().list_dashboards(owner_id, limit)
+
+
+@router.get("/dashboards/{dashboard_id}")
+async def get_dashboard(dashboard_id: str):
+    """获取仪表盘"""
+    from app.services.dashboard_service import get_dashboard_service
+    d = get_dashboard_service().get_dashboard(dashboard_id)
+    if not d:
+        raise HTTPException(404, "仪表盘不存在")
+    return d
+
+
+@router.put("/dashboards/{dashboard_id}")
+async def update_dashboard(dashboard_id: str, updates: dict = {}):
+    """更新仪表盘"""
+    from app.services.dashboard_service import get_dashboard_service
+    return get_dashboard_service().update_dashboard(dashboard_id, updates)
+
+
+@router.delete("/dashboards/{dashboard_id}")
+async def delete_dashboard(dashboard_id: str):
+    """删除仪表盘"""
+    from app.services.dashboard_service import get_dashboard_service
+    return get_dashboard_service().delete_dashboard(dashboard_id)
+
+
+@router.post("/dashboards/{dashboard_id}/widgets")
+async def add_widget(dashboard_id: str, req: WidgetAddRequest):
+    """添加组件"""
+    from app.services.dashboard_service import get_dashboard_service
+    return get_dashboard_service().add_widget(dashboard_id, req.dict())
+
+
+@router.put("/dashboards/{dashboard_id}/widgets/{widget_id}")
+async def update_widget(dashboard_id: str, widget_id: str, updates: dict = {}):
+    """更新组件"""
+    from app.services.dashboard_service import get_dashboard_service
+    return get_dashboard_service().update_widget(dashboard_id, widget_id, updates)
+
+
+@router.delete("/dashboards/{dashboard_id}/widgets/{widget_id}")
+async def remove_widget(dashboard_id: str, widget_id: str):
+    """移除组件"""
+    from app.services.dashboard_service import get_dashboard_service
+    return get_dashboard_service().remove_widget(dashboard_id, widget_id)
+
+
+@router.post("/dashboards/{dashboard_id}/share")
+async def share_dashboard(dashboard_id: str, user_ids: list[str] = []):
+    """共享仪表盘"""
+    from app.services.dashboard_service import get_dashboard_service
+    return get_dashboard_service().share_dashboard(dashboard_id, user_ids)
+
+
+@router.get("/dashboards/templates/list")
+async def list_dashboard_templates():
+    """列出仪表盘模板"""
+    from app.services.dashboard_service import get_dashboard_service
+    return get_dashboard_service().list_templates()
+
+
+# ============================================================
+# 模型基准评测
+# ============================================================
+
+class BenchmarkRunRequest(BaseModel):
+    model_id: str = ""
+    tasks: list[dict] = []
+
+
+@router.post("/benchmark/run")
+async def run_benchmark(req: BenchmarkRunRequest):
+    """执行模型评测"""
+    from app.services.model_benchmark_service import get_benchmark_service
+    return get_benchmark_service().run_benchmark(req.model_id, req.tasks or None)
+
+
+@router.get("/benchmark/leaderboard")
+async def benchmark_leaderboard(metric: str = "composite_score"):
+    """模型排行榜"""
+    from app.services.model_benchmark_service import get_benchmark_service
+    return get_benchmark_service().leaderboard(metric)
+
+
+@router.get("/benchmark/compare")
+async def benchmark_compare(model_ids: str = ""):
+    """模型对比"""
+    from app.services.model_benchmark_service import get_benchmark_service
+    ids = [m.strip() for m in model_ids.split(",") if m.strip()]
+    return get_benchmark_service().compare(ids)
+
+
+@router.get("/benchmark/report/{model_id}")
+async def benchmark_report(model_id: str):
+    """获取评测报告"""
+    from app.services.model_benchmark_service import get_benchmark_service
+    r = get_benchmark_service().get_report(model_id)
+    if not r:
+        raise HTTPException(404, "无评测数据")
+    return r
+
+
+@router.get("/benchmark/tasks")
+async def list_benchmark_tasks():
+    """列出评测任务"""
+    from app.services.model_benchmark_service import get_benchmark_service
+    return get_benchmark_service().list_tasks()
+
+
+# ============================================================
+# 模型热切换
+# ============================================================
+
+class ModelRegisterRequest(BaseModel):
+    model_id: str = ""
+    provider: str = ""
+    api_key: str = ""
+    endpoint: str = ""
+    max_tokens: int = 4096
+    temperature: float = 0.7
+    priority: int = 0
+
+
+class ModelSwitchRequest(BaseModel):
+    to_model: str = ""
+    reason: str = ""
+    traffic_percent: int = 100
+
+
+@router.post("/hotswap/models")
+async def register_model(req: ModelRegisterRequest):
+    """注册模型"""
+    from app.services.model_hotswap_service import get_hotswap_service
+    return get_hotswap_service().register_model(req.dict())
+
+
+@router.get("/hotswap/models")
+async def list_models():
+    """列出模型"""
+    from app.services.model_hotswap_service import get_hotswap_service
+    return get_hotswap_service().list_models()
+
+
+@router.get("/hotswap/models/{model_id}")
+async def get_model(model_id: str):
+    """获取模型详情"""
+    from app.services.model_hotswap_service import get_hotswap_service
+    m = get_hotswap_service().get_model(model_id)
+    if not m:
+        raise HTTPException(404, "模型不存在")
+    return m
+
+
+@router.post("/hotswap/switch")
+async def switch_model(req: ModelSwitchRequest):
+    """切换模型"""
+    from app.services.model_hotswap_service import get_hotswap_service
+    return get_hotswap_service().switch(req.to_model, req.reason, "manual", req.traffic_percent)
+
+
+@router.post("/hotswap/rollback")
+async def rollback_model(reason: str = "manual_rollback"):
+    """回滚模型"""
+    from app.services.model_hotswap_service import get_hotswap_service
+    return get_hotswap_service().rollback(reason)
+
+
+@router.get("/hotswap/current")
+async def current_model():
+    """获取当前模型"""
+    from app.services.model_hotswap_service import get_hotswap_service
+    return {"model_id": get_hotswap_service().get_current_model()}
+
+
+@router.get("/hotswap/history")
+async def switch_history(limit: int = 50):
+    """切换历史"""
+    from app.services.model_hotswap_service import get_hotswap_service
+    return get_hotswap_service().get_history(limit)
+
+
+@router.get("/hotswap/stats")
+async def hotswap_stats():
+    """切换统计"""
+    from app.services.model_hotswap_service import get_hotswap_service
+    return get_hotswap_service().get_stats()
+
+
+# ============================================================
+# 会话沙箱测试
+# ============================================================
+
+class SandboxTestCaseRequest(BaseModel):
+    name: str = ""
+    description: str = ""
+    agent_id: str = ""
+    messages: list[dict] = []
+    assertions: list[dict] = []
+    tags: list[str] = []
+
+
+@router.post("/sandbox/test-cases")
+async def create_sandbox_test_case(req: SandboxTestCaseRequest):
+    """创建沙箱测试用例"""
+    from app.services.conversation_sandbox_service import get_sandbox_service
+    return get_sandbox_service().create_test_case(req.dict())
+
+
+@router.get("/sandbox/test-cases")
+async def list_sandbox_test_cases(tag: str = "", agent_id: str = ""):
+    """列出测试用例"""
+    from app.services.conversation_sandbox_service import get_sandbox_service
+    return get_sandbox_service().list_test_cases(tag, agent_id)
+
+
+@router.delete("/sandbox/test-cases/{case_id}")
+async def delete_sandbox_test_case(case_id: str):
+    """删除测试用例"""
+    from app.services.conversation_sandbox_service import get_sandbox_service
+    return get_sandbox_service().delete_test_case(case_id)
+
+
+@router.post("/sandbox/run/{case_id}")
+async def run_sandbox_test(case_id: str):
+    """执行单条测试"""
+    from app.services.conversation_sandbox_service import get_sandbox_service
+    return await get_sandbox_service().run_single(case_id)
+
+
+@router.post("/sandbox/run-batch")
+async def run_sandbox_batch(case_ids: list[str] = [], tag: str = ""):
+    """批量执行测试"""
+    from app.services.conversation_sandbox_service import get_sandbox_service
+    return await get_sandbox_service().run_batch(case_ids or None, tag)
+
+
+@router.post("/sandbox/sessions")
+async def create_sandbox_session(agent_id: str):
+    """创建交互式沙箱"""
+    from app.services.conversation_sandbox_service import get_sandbox_service
+    return get_sandbox_service().create_session(agent_id)
+
+
+@router.post("/sandbox/sessions/{session_id}/send")
+async def send_sandbox_message(session_id: str, content: str):
+    """发送沙箱消息"""
+    from app.services.conversation_sandbox_service import get_sandbox_service
+    return await get_sandbox_service().send_message(session_id, content)
+
+
+@router.get("/sandbox/sessions/{session_id}/history")
+async def sandbox_session_history(session_id: str):
+    """获取沙箱会话历史"""
+    from app.services.conversation_sandbox_service import get_sandbox_service
+    return get_sandbox_service().get_session_history(session_id)
+
+
+@router.post("/sandbox/sessions/{session_id}/close")
+async def close_sandbox_session(session_id: str):
+    """关闭沙箱会话"""
+    from app.services.conversation_sandbox_service import get_sandbox_service
+    return get_sandbox_service().close_session(session_id)
+
+
+@router.get("/sandbox/statistics")
+async def sandbox_statistics():
+    """沙箱统计"""
+    from app.services.conversation_sandbox_service import get_sandbox_service
+    return get_sandbox_service().get_statistics()
+
+
+# ============================================================
+# 跨 Agent 恢复
+# ============================================================
+
+class RestorePlanRequest(BaseModel):
+    backup_id: str = ""
+    target_agent_id: str = ""
+    components: list[str] = []
+    conflict_resolution: str = "skip"
+
+
+@router.post("/cross-restore/backup")
+async def register_backup(backup_id: str, agent_id: str, data: dict = {}):
+    """注册备份"""
+    from app.services.cross_agent_restore_service import get_cross_agent_restore_service
+    return get_cross_agent_restore_service().register_backup(backup_id, agent_id, data)
+
+
+@router.post("/cross-restore/agent")
+async def register_restore_agent(agent_id: str, config: dict = {}):
+    """注册目标 Agent"""
+    from app.services.cross_agent_restore_service import get_cross_agent_restore_service
+    return get_cross_agent_restore_service().register_agent(agent_id, config)
+
+
+@router.post("/cross-restore/plan")
+async def create_restore_plan(req: RestorePlanRequest):
+    """创建恢复计划"""
+    from app.services.cross_agent_restore_service import get_cross_agent_restore_service
+    return get_cross_agent_restore_service().create_restore_plan(
+        req.backup_id, req.target_agent_id, req.components or None, req.conflict_resolution
+    )
+
+
+@router.post("/cross-restore/execute")
+async def execute_restore(plan_id: str):
+    """执行恢复"""
+    from app.services.cross_agent_restore_service import get_cross_agent_restore_service
+    return await get_cross_agent_restore_service().execute_restore(plan_id)
+
+
+@router.get("/cross-restore/verify")
+async def verify_restore(plan_id: str):
+    """验证恢复结果"""
+    from app.services.cross_agent_restore_service import get_cross_agent_restore_service
+    return get_cross_agent_restore_service().verify_restore(plan_id)
+
+
+@router.get("/cross-restore/history")
+async def restore_history(limit: int = 20):
+    """恢复历史"""
+    from app.services.cross_agent_restore_service import get_cross_agent_restore_service
+    return get_cross_agent_restore_service().get_history(limit)
+
+
+# ============================================================
+# Token 配额管理
+# ============================================================
+
+class QuotaCreateRequest(BaseModel):
+    entity_type: str = "user"
+    entity_id: str = ""
+    daily_limit: int = 0
+    monthly_limit: int = 0
+    total_limit: int = 0
+    alert_threshold: float = 0.8
+
+
+class QuotaUsageRequest(BaseModel):
+    entity_type: str = "user"
+    entity_id: str = ""
+    tokens: int = 0
+    model: str = ""
+    agent_id: str = ""
+    operation: str = "chat"
+
+
+class QuotaUpdateRequest(BaseModel):
+    daily_limit: Optional[int] = None
+    monthly_limit: Optional[int] = None
+    total_limit: Optional[int] = None
+    alert_threshold: Optional[float] = None
+
+
+@router.post("/quotas")
+async def create_quota(req: QuotaCreateRequest):
+    """创建配额"""
+    from app.services.token_quota_service import get_quota_service
+    return get_quota_service().create_quota(
+        req.entity_type, req.entity_id, req.daily_limit, req.monthly_limit,
+        req.total_limit, req.alert_threshold
+    )
+
+
+@router.get("/quotas")
+async def list_quotas(entity_type: str = "", entity_id: str = "", limit: int = 50):
+    """列出配额"""
+    from app.services.token_quota_service import get_quota_service
+    return get_quota_service().list_quotas(entity_type, entity_id, limit)
+
+
+@router.get("/quotas/{quota_id}")
+async def get_quota(quota_id: str):
+    """获取配额"""
+    from app.services.token_quota_service import get_quota_service
+    q = get_quota_service().get_quota(quota_id)
+    if not q:
+        raise HTTPException(404, "配额不存在")
+    return q
+
+
+@router.put("/quotas/{quota_id}")
+async def update_quota(quota_id: str, req: QuotaUpdateRequest):
+    """更新配额"""
+    from app.services.token_quota_service import get_quota_service
+    updates = {k: v for k, v in req.dict().items() if v is not None}
+    return get_quota_service().update_quota(quota_id, updates)
+
+
+@router.delete("/quotas/{quota_id}")
+async def delete_quota(quota_id: str):
+    """删除配额"""
+    from app.services.token_quota_service import get_quota_service
+    return get_quota_service().delete_quota(quota_id)
+
+
+@router.post("/quotas/usage")
+async def record_quota_usage(req: QuotaUsageRequest):
+    """记录使用量"""
+    from app.services.token_quota_service import get_quota_service
+    return get_quota_service().record_usage(
+        req.entity_type, req.entity_id, req.tokens, req.model, req.agent_id, req.operation
+    )
+
+
+@router.get("/quotas/usage/check")
+async def check_quota_available(entity_type: str, entity_id: str, tokens: int = 1000):
+    """检查配额可用性"""
+    from app.services.token_quota_service import get_quota_service
+    return get_quota_service().check_available(entity_type, entity_id, tokens)
+
+
+@router.get("/quotas/usage/{quota_id}")
+async def quota_usage_history(quota_id: str, limit: int = 100):
+    """使用历史"""
+    from app.services.token_quota_service import get_quota_service
+    return get_quota_service().get_usage_history(quota_id, limit)
+
+
+@router.get("/quotas/alerts")
+async def quota_alerts(limit: int = 50):
+    """配额告警"""
+    from app.services.token_quota_service import get_quota_service
+    return get_quota_service().get_alerts(limit)
+
+
+@router.get("/quotas/statistics")
+async def quota_statistics():
+    """配额统计"""
+    from app.services.token_quota_service import get_quota_service
+    return get_quota_service().get_statistics()
+
+
+@router.post("/quotas/reset/daily")
+async def reset_daily_quotas():
+    """重置日配额"""
+    from app.services.token_quota_service import get_quota_service
+    get_quota_service().reset_daily()
+    return {"reset": "daily"}
+
+
+@router.post("/quotas/reset/monthly")
+async def reset_monthly_quotas():
+    """重置月配额"""
+    from app.services.token_quota_service import get_quota_service
+    get_quota_service().reset_monthly()
+    return {"reset": "monthly"}
+
+
+# ============================================================
+# 技能组合优化
+# ============================================================
+
+class SkillRegisterRequest(BaseModel):
+    id: str = ""
+    name: str = ""
+    category: str = ""
+    tags: list[str] = []
+    dependencies: list[str] = []
+    conflicts: list[str] = []
+    resource_cost: float = 1.0
+    performance_impact: float = 0
+
+
+class SkillRecommendRequest(BaseModel):
+    purpose: str = ""
+    max_skills: int = 5
+    exclude: list[str] = []
+    include: list[str] = []
+
+
+@router.post("/skill-combo/register")
+async def register_skill(req: SkillRegisterRequest):
+    """注册技能"""
+    from app.services.skill_combination_service import get_skill_combination_service
+    return get_skill_combination_service().register_skill(req.dict())
+
+
+@router.get("/skill-combo/skills")
+async def list_skills(category: str = ""):
+    """列出技能"""
+    from app.services.skill_combination_service import get_skill_combination_service
+    return get_skill_combination_service().list_skills(category)
+
+
+@router.post("/skill-combo/detect-conflicts")
+async def detect_skill_conflicts(skill_ids: list[str] = []):
+    """检测冲突"""
+    from app.services.skill_combination_service import get_skill_combination_service
+    conflicts = get_skill_combination_service().detect_conflicts(skill_ids)
+    return [{"skill_a": c.skill_a, "skill_b": c.skill_b, "reason": c.reason, "severity": c.severity} for c in conflicts]
+
+
+@router.post("/skill-combo/check-dependencies")
+async def check_skill_dependencies(skill_ids: list[str] = []):
+    """检查依赖"""
+    from app.services.skill_combination_service import get_skill_combination_service
+    return get_skill_combination_service().check_dependencies(skill_ids)
+
+
+@router.post("/skill-combo/score")
+async def score_skill_combination(skill_ids: list[str] = []):
+    """评分组合"""
+    from app.services.skill_combination_service import get_skill_combination_service
+    result = get_skill_combination_service().score_combination(skill_ids)
+    return {
+        "score": result.score,
+        "conflicts": result.conflicts,
+        "total_resource_cost": result.total_resource_cost,
+        "synergy_score": result.synergy_score,
+        "coverage_score": result.coverage_score,
+    }
+
+
+@router.post("/skill-combo/recommend")
+async def recommend_skills(req: SkillRecommendRequest):
+    """推荐技能组合"""
+    from app.services.skill_combination_service import get_skill_combination_service
+    return get_skill_combination_service().recommend(
+        req.purpose, req.max_skills, req.exclude, req.include
+    )
+
+
+@router.get("/skill-combo/statistics")
+async def skill_combo_statistics():
+    """统计"""
+    from app.services.skill_combination_service import get_skill_combination_service
+    return get_skill_combination_service().get_statistics()

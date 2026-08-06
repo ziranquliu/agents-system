@@ -1,7 +1,9 @@
 """
 DAG 工作流引擎 - 拓扑排序、并行执行、依赖追踪、条件分支
+支持: 并行度控制 (max_concurrency)、子图结果缓存 (subgraph cache)
 """
 import asyncio
+import hashlib
 import json
 import uuid
 import logging
@@ -33,11 +35,68 @@ class DAGValidationError(Exception):
     pass
 
 
+class SubgraphCache:
+    """子图结果缓存 (TTL-based)"""
+
+    def __init__(self, max_size: int = 1000, default_ttl: int = 300):
+        self._cache: dict[str, tuple[Any, float]] = {}
+        self._max_size = max_size
+        self._default_ttl = default_ttl
+        self._hits = 0
+        self._misses = 0
+
+    def _make_key(self, node_ids: list[str], input_data: dict) -> str:
+        raw = json.dumps(sorted(node_ids)) + json.dumps(input_data, sort_keys=True, default=str)
+        return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+    def get(self, node_ids: list[str], input_data: dict) -> Optional[Any]:
+        key = self._make_key(node_ids, input_data)
+        entry = self._cache.get(key)
+        if entry is None:
+            self._misses += 1
+            return None
+        value, expires_at = entry
+        if time.time() > expires_at:
+            del self._cache[key]
+            self._misses += 1
+            return None
+        self._hits += 1
+        return value
+
+    def set(self, node_ids: list[str], input_data: dict, result: Any, ttl: Optional[int] = None):
+        if len(self._cache) >= self._max_size:
+            # 淘汰最旧的 20%
+            sorted_keys = sorted(self._cache.keys(), key=lambda k: self._cache[k][1])
+            for k in sorted_keys[:self._max_size // 5]:
+                del self._cache[k]
+        key = self._make_key(node_ids, input_data)
+        self._cache[key] = (result, time.time() + (ttl or self._default_ttl))
+
+    def invalidate(self, node_ids: Optional[list[str]] = None):
+        if node_ids is None:
+            self._cache.clear()
+            return
+        to_delete = [k for k in self._cache if any(nid in k for nid in node_ids)]
+        for k in to_delete:
+            del self._cache[k]
+
+    def stats(self) -> dict:
+        total = self._hits + self._misses
+        return {
+            "size": len(self._cache),
+            "hits": self._hits,
+            "misses": self._misses,
+            "hit_rate": round(self._hits / max(total, 1), 3),
+        }
+
+
 class WorkflowEngine:
     """DAG工作流引擎"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, max_concurrency: int = 20):
         self.db = db
+        self.max_concurrency = max_concurrency
+        self._subgraph_cache = SubgraphCache()
 
     # ==================================================================
     # DAG 校验与拓扑排序
@@ -353,31 +412,46 @@ class WorkflowEngine:
         start_time = time.time()
 
         try:
-            # 逐层执行
-            for level in levels:
-                level_tasks = []
-                for node_id in level:
-                    node = node_map[node_id]
-                    level_tasks.append(
-                        self._execute_node(node, variables, node_results, workflow.max_retries)
-                    )
+            # 逐层执行 (受 max_concurrency 控制)
+            semaphore = asyncio.Semaphore(self.max_concurrency)
 
-                # 同一层并行执行
+            for level in levels:
+                # 检查子图缓存
+                level_ids = sorted(level)
+                cached = self._subgraph_cache.get(level_ids, variables)
+                if cached is not None:
+                    node_results.update(cached)
+                    continue
+
+                async def _bounded_exec(node_id: str):
+                    async with semaphore:
+                        node = node_map[node_id]
+                        return node_id, await self._execute_node(node, variables, node_results, workflow.max_retries)
+
+                level_tasks = [_bounded_exec(node_id) for node_id in level]
+
                 if len(level_tasks) == 1:
-                    result = await level_tasks[0]
-                    node_results[level[0]] = result
+                    nid, result = await level_tasks[0]
+                    node_results[nid] = result
                 else:
                     level_results = await asyncio.gather(*level_tasks, return_exceptions=True)
-                    for nid, res in zip(level, level_results):
+                    for res in level_results:
                         if isinstance(res, Exception):
-                            node_results[nid] = {
+                            # 找不到 nid 时用通用 key
+                            node_results[f"error_{len(node_results)}"] = {
                                 "status": "failed",
                                 "output": "",
                                 "error": str(res),
                                 "duration_ms": 0,
                             }
                         else:
-                            node_results[nid] = res
+                            nid, result = res
+                            node_results[nid] = result
+
+                # 缓存子图结果 (TTL 60s)
+                level_result_subset = {nid: node_results.get(nid) for nid in level if nid in node_results}
+                if level_result_subset:
+                    self._subgraph_cache.set(level_ids, variables, level_result_subset, ttl=60)
 
                 # 检查是否有失败节点
                 for nid in level:
@@ -663,4 +737,11 @@ class WorkflowEngine:
         completed = (await self.db.execute(
             select(func.count()).select_from(Workflow).where(Workflow.status == "completed")
         )).scalar() or 0
-        return {"total": total, "running": running, "completed": completed, "failed": total - running - completed}
+        return {
+            "total": total,
+            "running": running,
+            "completed": completed,
+            "failed": total - running - completed,
+            "max_concurrency": self.max_concurrency,
+            "subgraph_cache": self._subgraph_cache.stats(),
+        }
