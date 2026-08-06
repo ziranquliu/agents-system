@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agent-system
+  labels:
+    app.kubernetes.io/name: agent-system
+    app.kubernetes.io/part-of: agent-system

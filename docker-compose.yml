@@ -1,0 +1,278 @@
+version: "3.9"
+
+services:
+  # ============================================================
+  # 核心应用
+  # ============================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agent-system-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://agent_user:agent_pass@postgres:5432/agent_db
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - LOKI_URL=http://loki:3100
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+      - app_data:/app/data
+      - backups:/app/backups
+    networks:
+      - agent-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: agent-system-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - agent-network
+
+  # ============================================================
+  # 数据库
+  # ============================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: agent-system-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agent_user
+      POSTGRES_PASSWORD: agent_pass
+      POSTGRES_DB: agent_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - agent-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent_user -d agent_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # 缓存 / 消息队列
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    container_name: agent-system-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - agent-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # 向量数据库
+  # ============================================================
+  qdrant:
+    image: qdrant/qdrant:v1.9
+    container_name: agent-system-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    networks:
+      - agent-network
+
+  # ============================================================
+  # 日志聚合
+  # ============================================================
+  elasticsearch:
+    image: elasticsearch:8.12.0
+    container_name: agent-system-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - agent-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: agent-system-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./deploy/loki/loki-config.yml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - agent-network
+
+  # ============================================================
+  # 可视化
+  # ============================================================
+  grafana:
+    image: grafana/grafana:10.3.0
+    container_name: agent-system-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./deploy/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./deploy/grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+      - elasticsearch
+    networks:
+      - agent-network
+
+  prometheus:
+    image: prom/prometheus:v2.49.0
+    container_name: agent-system-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - agent-network
+
+  # ============================================================
+  # 分布式追踪
+  # ============================================================
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.93.0
+    container_name: agent-system-otel-collector
+    restart: unless-stopped
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8888:8888"   # Prometheus metrics
+    volumes:
+      - ./deploy/otel/otel-collector-config.yml:/etc/otelcol-contrib/config.yaml
+    networks:
+      - agent-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    container_name: agent-system-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14250:14250"  # gRPC
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - agent-network
+
+  # ============================================================
+  # 任务队列（可选）
+  # ============================================================
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agent-system-celery-worker
+    restart: unless-stopped
+    command: celery -A app.core.celery_app worker -l info -c 4
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://agent_user:agent_pass@postgres:5432/agent_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - agent-network
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agent-system-celery-beat
+    restart: unless-stopped
+    command: celery -A app.core.celery_app beat -l info
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://agent_user:agent_pass@postgres:5432/agent_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - agent-network
+
+# ============================================================
+# 卷
+# ============================================================
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  es_data:
+  loki_data:
+  grafana_data:
+  prometheus_data:
+  app_data:
+  backups:
+
+# ============================================================
+# 网络
+# ============================================================
+networks:
+  agent-network:
+    driver: bridge

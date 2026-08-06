@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-config
+  namespace: agent-system
+data:
+  DATABASE_URL: "postgresql+asyncpg://agent_user:agent_pass@postgres:5432/agent_db"
+  REDIS_URL: "redis://redis:6379/0"
+  QDRANT_URL: "http://qdrant:6333"
+  ELASTICSEARCH_URL: "http://elasticsearch:9200"
+  LOKI_URL: "http://loki:3100"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  CORS_ORIGINS: '["https://agent.example.com"]'
