@@ -1,94 +1,72 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
-import MainLayout from './components/MainLayout'
-import Dashboard from './pages/Dashboard'
-import Agents from './pages/Agents'
-import AgentDetail from './pages/AgentDetail'
-import Conversations from './pages/Conversations'
-import ConversationDetail from './pages/ConversationDetail'
-import Models from './pages/Models'
-import SkillMarket from './pages/SkillMarket'
-import AgentMarket from './pages/AgentMarket'
-import MCPMarket from './pages/MCPMarket'
-import ModelMarket from './pages/ModelMarket'
-import Skills from './pages/Skills'
-import MCPServers from './pages/MCPServers'
-import Users from './pages/Users'
-import Workspaces from './pages/Workspaces'
-import OperationLogs from './pages/OperationLogs'
-import ScannerDashboard from './pages/ScannerDashboard'
-import UpdateCenter from './pages/UpdateCenter'
-import CollaborationsPage from './pages/CollaborationsPage'
-import SkillOptimization from './pages/SkillOptimization'
-import MCPOptimization from './pages/MCPOptimization'
-import ConversationEnhancement from './pages/ConversationEnhancement'
-import KnowledgePage from './pages/KnowledgePage'
-import TaskPage from './pages/TaskPage'
-import AgentMemoryPage from './pages/AgentMemoryPage'
-import ModelTemplatePage from './pages/ModelTemplatePage'
-import BatchInstallPage from './pages/BatchInstallPage'
-import SkillReusePage from './pages/SkillReusePage'
-import MCPBatchPage from './pages/MCPBatchPage'
-import DialogueEnhancementPage from './pages/DialogueEnhancementPage'
-import MonitoringDashboardPage from './pages/MonitoringDashboardPage'
-import OpsPage from './pages/OpsPage'
-import BackupEnhancedPage from './pages/BackupEnhancedPage'
-import HealthPage from './pages/HealthPage'
-import AuditPage from './pages/AuditPage'
-import SchedulerPage from './pages/SchedulerPage'
-import TokenPage from './pages/TokenPage'
-import SystemMonitorPage from './pages/SystemMonitorPage'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import NotFound from './pages/NotFound'
+import React, { Suspense, lazy } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { Spin } from 'antd';
+import MainLayout from './layouts/MainLayout';
 
-function App() {
+// Lazy load pages
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const AgentListPage = lazy(() => import('./pages/agent/AgentListPage'));
+const AgentDetailPage = lazy(() => import('./pages/agent/AgentDetailPage'));
+const ModelListPage = lazy(() => import('./pages/model/ModelListPage'));
+const SkillListPage = lazy(() => import('./pages/skill/SkillListPage'));
+const MCPListPage = lazy(() => import('./pages/mcp/MCPListPage'));
+const SessionListPage = lazy(() => import('./pages/session/SessionListPage'));
+const KnowledgePage = lazy(() => import('./pages/knowledge/KnowledgePage'));
+const WorkflowPage = lazy(() => import('./pages/workflow/WorkflowPage'));
+const BackupPage = lazy(() => import('./pages/system/BackupPage'));
+const AuditPage = lazy(() => import('./pages/system/AuditPage'));
+const SystemHealthPage = lazy(() => import('./pages/system/SystemHealthPage'));
+const SettingsPage = lazy(() => import('./pages/system/SettingsPage'));
+const DashboardConfigPage = lazy(() => import('./pages/dashboard/DashboardConfigPage'));
+const TokenQuotaPage = lazy(() => import('./pages/budget/TokenQuotaPage'));
+
+const Loading = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+    <Spin size="large" tip="加载中..." />
+  </div>
+);
+
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const token = localStorage.getItem('access_token');
+  if (!token) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+};
+
+const App: React.FC = () => {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/" element={<MainLayout />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="agents" element={<Agents />} />
-        <Route path="agents/:id" element={<AgentDetail />} />
-        <Route path="conversations" element={<Conversations />} />
-        <Route path="conversations/:id" element={<ConversationDetail />} />
-        <Route path="models" element={<Models />} />
-        <Route path="skills" element={<Skills />} />
-        <Route path="batch-install" element={<BatchInstallPage />} />
-        <Route path="skill-reuse" element={<SkillReusePage />} />
-        <Route path="mcp-batch" element={<MCPBatchPage />} />
-        <Route path="skill-market" element={<SkillMarket />} />
-        <Route path="agent-market" element={<AgentMarket />} />
-        <Route path="model-market" element={<ModelMarket />} />
-        <Route path="model-templates" element={<ModelTemplatePage />} />
-        <Route path="mcp" element={<MCPServers />} />
-        <Route path="mcp-market" element={<MCPMarket />} />
-        <Route path="workspaces" element={<Workspaces />} />
-        <Route path="users" element={<Users />} />
-        <Route path="operation-logs" element={<OperationLogs />} />
-        <Route path="scanner" element={<ScannerDashboard />} />
-        <Route path="updates" element={<UpdateCenter />} />
-        <Route path="collaborations" element={<CollaborationsPage />} />
-        <Route path="skill-optimization" element={<SkillOptimization />} />
-        <Route path="mcp-optimization" element={<MCPOptimization />} />
-        <Route path="conversation-enhancement" element={<ConversationEnhancement />} />
-        <Route path="dialogue-enhancement" element={<DialogueEnhancementPage />} />
-        <Route path="monitoring" element={<MonitoringDashboardPage />} />
-        <Route path="ops" element={<OpsPage />} />
-        <Route path="backup-enhanced" element={<BackupEnhancedPage />} />
-        <Route path="health" element={<HealthPage />} />
-        <Route path="audit" element={<AuditPage />} />
-        <Route path="scheduler" element={<SchedulerPage />} />
-        <Route path="tokens" element={<TokenPage />} />
-        <Route path="knowledge" element={<KnowledgePage />} />
-        <Route path="tasks" element={<TaskPage />} />
-        <Route path="agent-memory" element={<AgentMemoryPage />} />
-        <Route path="system-monitor" element={<SystemMonitorPage />} />
-      </Route>
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  )
-}
+    <Suspense fallback={<Loading />}>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <MainLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="agents" element={<AgentListPage />} />
+          <Route path="agents/:id" element={<AgentDetailPage />} />
+          <Route path="models" element={<ModelListPage />} />
+          <Route path="skills" element={<SkillListPage />} />
+          <Route path="mcp" element={<MCPListPage />} />
+          <Route path="sessions" element={<SessionListPage />} />
+          <Route path="knowledge" element={<KnowledgePage />} />
+          <Route path="workflows" element={<WorkflowPage />} />
+          <Route path="backups" element={<BackupPage />} />
+          <Route path="audit" element={<AuditPage />} />
+          <Route path="health" element={<SystemHealthPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="dashboards/:id" element={<DashboardConfigPage />} />
+          <Route path="budget" element={<TokenQuotaPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
+  );
+};
 
-export default App
+export default App;
