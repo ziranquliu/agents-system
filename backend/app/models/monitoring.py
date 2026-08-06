@@ -60,6 +60,12 @@ class AlertConfig(Base):
 
     enabled = Column(Boolean, default=True)
 
+    # 静默管理
+    silence_start = Column(String(16), nullable=True)   # "HH:MM" UTC — 静默开始时间
+    silence_end = Column(String(16), nullable=True)     # "HH:MM" UTC — 静默结束时间
+    silence_days = Column(Text, nullable=True)          # JSON: [0,1,2,3,4,5,6] 星期几(0=周一)
+    cooldown_minutes = Column(Integer, default=15)      # 同一告警冷却时间(分钟),避免重复通知
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=lambda: datetime.now(timezone.utc))
 

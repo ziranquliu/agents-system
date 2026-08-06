@@ -26,6 +26,10 @@ class TokenUsage(Base):
     compressed_tokens = Column(Integer, default=0)  # 上下文裁剪节省 token 数
     cost = Column(Float, default=0.0)  # USD
     usage_date = Column(String(10), index=True)  # YYYY-MM-DD（便于按日聚合）
+    # 成本分摊
+    project_id = Column(String(100), nullable=True, index=True)    # 项目 ID
+    department = Column(String(100), nullable=True, index=True)    # 部门名称
+    tags = Column(Text, nullable=True)  # JSON: 自定义标签 {"env": "prod", "team": "ai"}
     created_at = Column(DateTime(timezone=True), server_default=func.now(), default=lambda: datetime.now(timezone.utc))
 
 

@@ -231,6 +231,13 @@ async def prometheus_metrics(db: AsyncSession = Depends(get_db)):
     content = await svc.metrics_for_prometheus()
     return PlainTextResponse(content=content, media_type="text/plain")
 
+
+@router.get("/metrics", summary="标准 Prometheus /metrics 端点")
+async def standard_metrics():
+    """返回标准 Prometheus exposition format 指标"""
+    from app.core.prometheus import metrics
+    return PlainTextResponse(content=metrics.render(), media_type="text/plain")
+
 # ----------------------------------------------------------
 # 自愈通知通道
 # ----------------------------------------------------------
@@ -310,3 +317,99 @@ async def send_test_notify(data: dict, db: AsyncSession = Depends(get_db)):
     )
     ok = any(result.values())
     return {"success": ok, "data": result, "message": "通知已尝试发送" if ok else "通知发送失败，详见服务端日志"}
+
+
+# ----------------------------------------------------------
+# 告警静默管理
+# ----------------------------------------------------------
+
+@router.get("/alerts/active", summary="获取当前活跃告警")
+async def get_active_alerts(
+    priority: Optional[str] = Query(None),
+    agent_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.alert_silence_service import AlertSilenceManager
+    records = await AlertSilenceManager.get_active_alerts(db, priority=priority, agent_id=agent_id)
+    return {"items": [_alert_record_to_dict(r) for r in records], "total": len(records)}
+
+
+@router.get("/alerts/stats", summary="告警统计")
+async def get_alert_stats(db: AsyncSession = Depends(get_db)):
+    from app.services.alert_silence_service import AlertSilenceManager
+    stats = await AlertSilenceManager.get_alert_stats(db)
+    return stats
+
+
+@router.put("/alerts/{alert_id}/silence", summary="配置告警静默规则")
+async def silence_alert(
+    alert_id: str,
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.alert_silence_service import AlertSilenceManager
+    silence_start = data.get("silence_start")
+    silence_end = data.get("silence_end")
+    if not silence_start or not silence_end:
+        raise HTTPException(400, "silence_start 和 silence_end 不能为空")
+
+    config = await AlertSilenceManager.silence_alert_config(
+        db=db,
+        config_id=alert_id,
+        silence_start=silence_start,
+        silence_end=silence_end,
+        silence_days=data.get("silence_days"),
+        cooldown_minutes=data.get("cooldown_minutes", 15),
+    )
+    if not config:
+        raise HTTPException(404, "告警配置不存在")
+    return _alert_config_to_dict(config)
+
+
+@router.delete("/alerts/{alert_id}/silence", summary="清除告警静默规则")
+async def clear_alert_silence(
+    alert_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.alert_silence_service import AlertSilenceManager
+    config = await AlertSilenceManager.clear_silence(db, alert_id)
+    if not config:
+        raise HTTPException(404, "告警配置不存在")
+    return {"success": True}
+
+
+@router.post("/alerts/batch-resolve", summary="批量解除告警")
+async def batch_resolve_alerts(
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.alert_silence_service import AlertSilenceManager
+    agent_id = data.get("agent_id")
+    count = await AlertSilenceManager.batch_resolve(db, agent_id=agent_id)
+    return {"resolved": count}
+
+
+# ----------------------------------------------------------
+# 日志聚合
+# ----------------------------------------------------------
+
+@router.get("/logs/search", summary="搜索聚合日志")
+async def search_logs(
+    query: str = Query(""),
+    level: Optional[str] = Query(None),
+    agent_id: Optional[str] = Query(None),
+    backend: str = Query("elasticsearch"),
+    size: int = Query(100, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.log_aggregation_service import get_log_aggregation_service
+    svc = get_log_aggregation_service()
+    result = await svc.search(query=query, level=level, agent_id=agent_id, backend=backend, size=size)
+    return result
+
+
+@router.get("/logs/health", summary="日志聚合后端健康检查")
+async def log_backend_health():
+    from app.services.log_aggregation_service import get_log_aggregation_service
+    svc = get_log_aggregation_service()
+    return await svc.health_check()

@@ -463,3 +463,171 @@ class SessionManager:
             select(Conversation).where(Conversation.id == session_id)
         )
         return result.scalar_one_or_none()
+
+    # ==================================================================
+    # 三级存储分层 (Hot→Warm→Cold)
+    # ==================================================================
+
+    """
+    存储层级:
+    - Hot: 活跃会话(内存/Redis) — 当前由上下文窗口策略管理
+    - Warm: PG 中的归档会话 — status=archived, 消息保留
+    - Cold: JSON 文件存储 — status=cleaned, 消息已归档到磁盘
+    """
+
+    async def archive_to_cold_storage(
+        self, session_id: str, base_path: str = "cold_storage/sessions"
+    ) -> dict:
+        """
+        将已归档会话的消息导出到 JSON 文件(冷存储),然后清理 DB 消息。
+
+        流程:
+        1. 读取会话的所有消息
+        2. 导出为 JSON 文件(base_path/session_id.json)
+        3. 删除 DB 中的消息记录
+        4. 会话状态设为 cleaned
+        """
+        import os
+
+        session = await self._get_session(session_id)
+        if not session:
+            raise ValueError(f"会话不存在: {session_id}")
+        if session.status not in ("archived", "cleaned"):
+            raise ValueError(f"只能归档 archived/cleaned 状态的会话,当前: {session.status}")
+
+        # 读取所有消息
+        msg_result = await self.db.execute(
+            select(Message)
+            .where(Message.conversation_id == session_id)
+            .order_by(Message.created_at)
+        )
+        messages = list(msg_result.scalars().all())
+
+        if not messages:
+            session.status = "cleaned"
+            session.updated_at = datetime.now(timezone.utc)
+            await self.db.flush()
+            return {"archived": True, "messages_exported": 0, "file": None}
+
+        # 构建归档数据
+        archive_data = {
+            "session_id": session_id,
+            "user_id": session.user_id,
+            "agent_id": session.agent_id,
+            "title": session.title,
+            "created_at": str(session.created_at),
+            "archived_at": str(datetime.now(timezone.utc)),
+            "message_count": len(messages),
+            "total_tokens": session.token_count or 0,
+            "messages": [
+                {
+                    "id": m.id,
+                    "role": m.role,
+                    "content": m.content,
+                    "token_count": m.token_count or 0,
+                    "model_name": m.model_name,
+                    "created_at": str(m.created_at),
+                }
+                for m in messages
+            ],
+        }
+
+        # 写入 JSON 文件
+        os.makedirs(base_path, exist_ok=True)
+        file_path = os.path.join(base_path, f"{session_id}.json")
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(archive_data, f, ensure_ascii=False, indent=2)
+
+        # 删除 DB 中的消息
+        for msg in messages:
+            await self.db.delete(msg)
+
+        session.status = "cleaned"
+        session.updated_at = datetime.now(timezone.utc)
+        await self.db.flush()
+
+        logger.info(
+            "会话 %s 已归档到冷存储: %s (%d条消息)",
+            session_id, file_path, len(messages),
+        )
+        return {
+            "archived": True,
+            "messages_exported": len(messages),
+            "file": file_path,
+        }
+
+    async def restore_from_cold_storage(
+        self, session_id: str, base_path: str = "cold_storage/sessions"
+    ) -> dict:
+        """
+        从冷存储 JSON 文件恢复会话消息到 DB。
+
+        流程:
+        1. 读取 JSON 归档文件
+        2. 恢复消息到 DB
+        3. 会话状态设为 active
+        """
+        import os
+
+        session = await self._get_session(session_id)
+        if not session:
+            raise ValueError(f"会话不存在: {session_id}")
+
+        file_path = os.path.join(base_path, f"{session_id}.json")
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"冷存储文件不存在: {file_path}")
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            archive_data = json.load(f)
+
+        restored_count = 0
+        for msg_data in archive_data.get("messages", []):
+            msg = Message(
+                id=msg_data.get("id", str(uuid.uuid4())),
+                conversation_id=session_id,
+                role=msg_data.get("role", "user"),
+                content=msg_data.get("content", ""),
+                token_count=msg_data.get("token_count", 0),
+                model_name=msg_data.get("model_name"),
+                created_at=datetime.now(timezone.utc),
+            )
+            self.db.add(msg)
+            restored_count += 1
+
+        session.status = "active"
+        session.updated_at = datetime.now(timezone.utc)
+        await self.db.flush()
+
+        logger.info("会话 %s 已从冷存储恢复: %d条消息", session_id, restored_count)
+        return {"restored": True, "messages_restored": restored_count, "file": file_path}
+
+    async def batch_cold_archive(
+        self, older_than_days: int = 90, base_path: str = "cold_storage/sessions"
+    ) -> dict:
+        """
+        批量冷存储: 将超过指定天数的 archived 会话导出到 JSON 文件。
+
+        常用于定时任务。
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        result = await self.db.execute(
+            select(Conversation).where(
+                and_(
+                    Conversation.status == "archived",
+                    Conversation.updated_at < cutoff,
+                )
+            )
+        )
+        sessions = list(result.scalars().all())
+
+        archived = 0
+        failed = 0
+        for session in sessions:
+            try:
+                await self.archive_to_cold_storage(session.id, base_path)
+                archived += 1
+            except Exception as e:
+                failed += 1
+                logger.warning("批量冷存储会话 %s 失败: %s", session.id, str(e))
+
+        return {"archived": archived, "failed": failed, "total": len(sessions)}

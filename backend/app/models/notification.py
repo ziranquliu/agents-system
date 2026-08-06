@@ -29,6 +29,12 @@ class NotificationConfig(Base):
     # Webhook
     webhook_url = Column(String(500), nullable=True)  # 全局默认 Webhook，Agent 级 webhook_url 优先
 
+    # IM 通道（飞书/钉钉/企业微信）
+    feishu_webhook = Column(String(500), nullable=True)   # 飞书机器人 Webhook
+    dingtalk_webhook = Column(String(500), nullable=True) # 钉钉机器人 Webhook
+    wecom_webhook = Column(String(500), nullable=True)    # 企业微信机器人 Webhook
+    active_channels = Column(String(255), nullable=True)  # JSON 数组: ["feishu","dingtalk","wecom"] 启用的通道
+
     # SMTP
     smtp_host = Column(String(255), nullable=True)
     smtp_port = Column(Integer, default=465)

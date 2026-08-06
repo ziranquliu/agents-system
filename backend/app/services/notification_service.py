@@ -83,7 +83,8 @@ async def send_email(to: str, subject: str, body: str,
 
 async def notify(method: str, target: Optional[str], title: str, content: str,
                  webhook_url: Optional[str] = None,
-                 cfg: Optional[NotificationConfig] = None) -> dict:
+                 cfg: Optional[NotificationConfig] = None,
+                 event: str = "self_heal") -> dict:
     """
     统一通知入口。
 
@@ -94,13 +95,18 @@ async def notify(method: str, target: Optional[str], title: str, content: str,
         content: 通知正文
         webhook_url: 优先使用的 Webhook 地址（Agent 级）
         cfg: 通知配置对象；为 None 时仅能发送 webhook（未配置 SMTP 时邮件降级）
+        event: 事件类型（影响飞书卡片颜色）
 
     返回:
-        {"webhook": bool, "email": bool} 各通道是否成功
+        {"webhook": bool, "email": bool, "im": dict, "sent_channels": list}
+            webhook: 通用 webhook 是否成功
+            email: 邮件是否成功
+            im: {channel: bool} 各 IM 通道发送结果
+            sent_channels: 成功发送的所有通道名集合
     """
     if method == NotifyMethod.OFF or not method:
         logger.info("notify: 通知方式为 off，跳过")
-        return {"webhook": False, "email": False}
+        return {"webhook": False, "email": False, "im": {}, "sent_channels": []}
 
     send_web = method in (NotifyMethod.WEBHOOK, NotifyMethod.BOTH)
     send_mail = method in (NotifyMethod.EMAIL, NotifyMethod.BOTH)
@@ -108,22 +114,127 @@ async def notify(method: str, target: Optional[str], title: str, content: str,
     payload = {
         "title": title,
         "content": content,
-        "event": "self_heal",
+        "event": event,
         "timestamp": None,  # 由调用方填充
     }
 
     webhook_ok = email_ok = False
+    sent_channels = []
 
     # Webhook：优先 Agent 级 webhook_url，其次全局配置
     if send_web:
         url = webhook_url or (cfg.webhook_url if cfg else None)
-        webhook_ok = await send_webhook(url, payload)
+        if url:
+            webhook_ok = await send_webhook(url, payload)
+            if webhook_ok:
+                sent_channels.append("webhook")
 
     # 邮件：需要收件人 + SMTP 配置
     if send_mail and target:
         email_ok = await send_email(target, title, content, cfg)
+        if email_ok:
+            sent_channels.append("email")
 
-    return {"webhook": webhook_ok, "email": email_ok}
+    # IM 多通道（飞书/钉钉/企微）：随通知一并推送启用的通道
+    im_sent = {}
+    if cfg:
+        active = _parse_channels(cfg.active_channels)
+        channel_webhook_map = {
+            IMChannel.FEISHU: cfg.feishu_webhook,
+            IMChannel.DINGTALK: cfg.dingtalk_webhook,
+            IMChannel.WECOM: cfg.wecom_webhook,
+        }
+        for channel in active:
+            ok = await send_im_channel(channel, channel_webhook_map.get(channel), title, content, event)
+            im_sent[channel] = ok
+            if ok:
+                sent_channels.append(channel)
+
+    return {"webhook": webhook_ok, "email": email_ok, "im": im_sent, "sent_channels": sent_channels}
+
+
+# ==================================================================
+# IM 多渠道通知适配器（飞书 / 钉钉 / 企业微信）
+# ==================================================================
+
+class IMChannel:
+    """IM 通道常量"""
+    FEISHU = "feishu"
+    DINGTALK = "dingtalk"
+    WECOM = "wecom"
+
+
+def build_feishu_payload(title: str, content: str, event: str = "alert") -> dict:
+    """飞书机器人消息：post 富文本 + 可选 markdown。飞书 markdown 需用 interactive card 或 text。"""
+    return {
+        "msg_type": "interactive",
+        "card": {
+            "config": {"wide_screen_mode": True},
+            "header": {
+                "template": "red" if event != "info" else "blue",
+                "title": {"tag": "plain_text", "content": title},
+            },
+            "elements": [
+                {"tag": "div", "text": {"tag": "lark_md", "content": content}},
+            ],
+        },
+    }
+
+
+def build_dingtalk_payload(title: str, content: str, event: str = "alert") -> dict:
+    """钉钉机器人消息：markdown 消息。"""
+    return {
+        "msgtype": "markdown",
+        "markdown": {
+            "title": title,
+            "text": f"### {title}\n{content}",
+        },
+    }
+
+
+def build_wecom_payload(title: str, content: str, event: str = "alert") -> dict:
+    """企业微信机器人消息：markdown 消息。"""
+    return {
+        "msgtype": "markdown",
+        "markdown": {
+            "content": f"### {title}\n{content}",
+        },
+    }
+
+
+CHANNEL_BUILDERS = {
+    IMChannel.FEISHU: build_feishu_payload,
+    IMChannel.DINGTALK: build_dingtalk_payload,
+    IMChannel.WECOM: build_wecom_payload,
+}
+
+
+async def send_im_channel(channel: str, webhook_url: str, title: str, content: str,
+                          event: str = "alert") -> bool:
+    """向指定 IM 通道发送消息。未配置通道或未知通道时返回 False。"""
+    builder = CHANNEL_BUILDERS.get(channel)
+    if builder is None:
+        logger.warning("send_im_channel: 未知通道 %s，跳过", channel)
+        return False
+    if not webhook_url:
+        logger.warning("send_im_channel: 通道 %s 未配置 webhook，跳过", channel)
+        return False
+    payload = builder(title, content, event)
+    return await send_webhook(webhook_url, payload)
+
+
+def _parse_channels(raw: str) -> list:
+    """解析启用的通道列表（JSON 数组字符串 或 逗号分隔）。"""
+    if not raw:
+        return []
+    try:
+        import json
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return [c for c in parsed if c in CHANNEL_BUILDERS]
+    except Exception:  # noqa: BLE001
+        pass
+    return [c.strip() for c in raw.replace(",", " ").split() if c.strip() in CHANNEL_BUILDERS]
 
 
 async def get_notification_config(db: AsyncSession) -> NotificationConfig:

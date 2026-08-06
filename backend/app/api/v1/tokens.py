@@ -165,3 +165,61 @@ async def save_cascade_rule(body: dict, session: AsyncSession = Depends(get_db))
 @router.get("/effectiveness", summary="优化效果评估（压缩率/缓存命中率/成本节省）")
 async def effectiveness(days: int = Query(30, ge=1, le=365), session: AsyncSession = Depends(get_db)):
     return await OptimizationService.get_effectiveness(session, days=days)
+
+
+# ----------------------------------------------------------
+# 成本分摊
+# ----------------------------------------------------------
+
+@router.get("/cost/by-project", summary="按项目聚合成本")
+async def cost_by_project(
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    session: AsyncSession = Depends(get_db),
+):
+    from app.services.cost_allocation_service import CostAllocationService
+    return await CostAllocationService.get_cost_by_project(session, start_date, end_date)
+
+
+@router.get("/cost/by-department", summary="按部门聚合成本")
+async def cost_by_department(
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    session: AsyncSession = Depends(get_db),
+):
+    from app.services.cost_allocation_service import CostAllocationService
+    return await CostAllocationService.get_cost_by_department(session, start_date, end_date)
+
+
+@router.get("/cost/by-model", summary="按模型聚合成本")
+async def cost_by_model(
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    session: AsyncSession = Depends(get_db),
+):
+    from app.services.cost_allocation_service import CostAllocationService
+    return await CostAllocationService.get_cost_by_model(session, start_date, end_date)
+
+
+@router.get("/cost/trend", summary="每日成本趋势")
+async def cost_trend(
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    project_id: Optional[str] = Query(None),
+    department: Optional[str] = Query(None),
+    session: AsyncSession = Depends(get_db),
+):
+    from app.services.cost_allocation_service import CostAllocationService
+    return await CostAllocationService.get_daily_cost_trend(
+        session, start_date, end_date, project_id, department
+    )
+
+
+@router.get("/cost/summary", summary="成本分摊综合报告")
+async def cost_summary(
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    session: AsyncSession = Depends(get_db),
+):
+    from app.services.cost_allocation_service import CostAllocationService
+    return await CostAllocationService.get_cost_summary(session, start_date, end_date)
