@@ -3,6 +3,7 @@ Alembic 迁移环境配置 - 支持异步 SQLAlchemy
 """
 import asyncio
 from logging.config import fileConfig
+from pathlib import Path
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
@@ -12,6 +13,21 @@ from alembic import context
 
 import sys
 sys.path.insert(0, '.')  # 确保能找到 app 包
+
+# 加载 .env 文件（从项目根目录或 backend 目录）
+from dotenv import load_dotenv
+for _env_dir in [Path(__file__).resolve().parent.parent.parent, Path(__file__).resolve().parent.parent]:
+    _env_path = _env_dir / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path)
+        break
+
+# 如果 .env 中有 DATABASE_URL，覆盖 alembic.ini 的配置
+import os
+db_url = os.getenv("DATABASE_URL")
+if db_url:
+    config = context.config
+    config.set_main_option("sqlalchemy.url", db_url)
 
 # Alembic Config
 config = context.config

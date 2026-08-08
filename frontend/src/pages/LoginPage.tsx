@@ -22,12 +22,16 @@ const LoginPage: React.FC = () => {
         '/auth/login',
         values,
       );
-      if (res.code === 0 && res.data) {
-        login(res.data.access_token, res.data.user);
+      // 后端直接返回 TokenResponse { access_token, user, ... }，无统一响应包装
+      // 兼容两种格式：有 code 字段的统一格式 和 直接返回的数据格式
+      const token = res.data?.access_token || (res as any).access_token;
+      const user = res.data?.user || (res as any).user;
+      if (token && user) {
+        login(token, user);
         message.success('登录成功');
         navigate('/dashboard');
       } else {
-        message.error(res.message || '登录失败');
+        message.error((res as any).message || (res as any).detail || '登录失败');
       }
     } catch {
       message.error('登录失败, 请检查用户名和密码');

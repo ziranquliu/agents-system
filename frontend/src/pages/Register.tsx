@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { register as apiRegister } from '../api/auth'
 
 export default function Register() {
   const navigate = useNavigate()
-  const { register, loading } = useAuthStore()
+  const { login } = useAuthStore()
+  const [loading, setLoading] = useState(false)
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -29,16 +31,20 @@ export default function Register() {
       return
     }
 
+    setLoading(true)
     try {
-      await register({
+      const res = await apiRegister({
         username: username.trim(),
         email: email.trim(),
         password,
         display_name: displayName.trim() || undefined,
       })
+      login(res.access_token, res.user)
       navigate('/dashboard')
     } catch (err: any) {
       setError(err?.response?.data?.detail || '注册失败，请稍后重试')
+    } finally {
+      setLoading(false)
     }
   }
 

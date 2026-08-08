@@ -1,24 +1,32 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { login as apiLogin } from '../api/auth'
 
 export default function Login() {
   const navigate = useNavigate()
-  const { login, loading } = useAuthStore()
+  const { login } = useAuthStore()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setLoading(true)
     try {
-      await login(username, password)
+      const res = await apiLogin(username, password)
+      login(res.access_token, res.user)
       navigate('/dashboard')
     } catch (err: any) {
-      setError(
-        err?.response?.data?.detail || '登录失败，请检查用户名和密码',
-      )
+      const msg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        '登录失败，请检查用户名和密码'
+      setError(msg)
+    } finally {
+      setLoading(false)
     }
   }
 

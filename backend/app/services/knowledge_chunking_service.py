@@ -284,9 +284,9 @@ class KnowledgeChunkingService:
             ))
         return chunks
 
-    def _chunk_recursive(self, doc_id: str, content: str, config: ChunkingConfig) -> list[Chunk]:
+    def _chunk_recursive(self, doc_id: str, content: str, config: ChunkingConfig, _depth: int = 0) -> list[Chunk]:
         """递归分割"""
-        if len(content) <= config.chunk_size:
+        if len(content) <= config.chunk_size or _depth > 20:
             return [Chunk(
                 id=str(uuid.uuid4()),
                 document_id=doc_id,
@@ -304,11 +304,23 @@ class KnowledgeChunkingService:
                 best_sep_pos = pos + len(sep)
                 break
 
+        # 确保分割点不为0（避免无限递归）
+        if best_sep_pos == 0:
+            best_sep_pos = mid
+        if best_sep_pos >= len(content):
+            best_sep_pos = mid
+
         left = content[:best_sep_pos]
         right = content[best_sep_pos:]
 
-        left_chunks = self._chunk_recursive(doc_id, left, config)
-        right_chunks = self._chunk_recursive(doc_id, right, config)
+        # 确保每次分割都缩小内容
+        if len(left) >= len(content) and len(right) >= len(content):
+            best_sep_pos = mid
+            left = content[:best_sep_pos]
+            right = content[best_sep_pos:]
+
+        left_chunks = self._chunk_recursive(doc_id, left, config, _depth + 1)
+        right_chunks = self._chunk_recursive(doc_id, right, config, _depth + 1)
 
         # 更新索引
         for i, chunk in enumerate(right_chunks):

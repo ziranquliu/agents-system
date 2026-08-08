@@ -14,6 +14,7 @@ class UpdateSnapshot(Base):
     """更新快照 — 每次更新前保留旧状态，用于回滚"""
     __tablename__ = "update_snapshots"
 
+
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     component_type = Column(String(20), index=True)  # skill / mcp / agent / model
     component_id = Column(String(36), index=True)
@@ -31,6 +32,7 @@ class UpdateSnapshot(Base):
 class UpdateLog(Base):
     """更新操作日志 — 更新时间/变更内容/兼容性结果/回滚状态"""
     __tablename__ = "update_logs"
+
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     component_type = Column(String(20), index=True)

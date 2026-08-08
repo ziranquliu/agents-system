@@ -64,6 +64,7 @@ class BackupRecord(Base):
     """备份记录"""
     __tablename__ = "backup_records"
 
+
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     agent_id = Column(String(255), index=True)
     agent_name = Column(String(255))
@@ -90,6 +91,7 @@ class BackupPolicy(Base):
     """备份策略（按 Agent）"""
     __tablename__ = "backup_policies"
 
+
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     agent_id = Column(String(255), unique=True, index=True)
     agent_name = Column(String(255))
@@ -113,6 +115,7 @@ class BackupEventLog(Base):
     """事件触发备份日志"""
     __tablename__ = "backup_event_logs"
 
+
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     agent_id = Column(String(255), index=True)
     event_type = Column(String(128))
@@ -125,6 +128,7 @@ class BackupEventLog(Base):
 class RestoreOperation(Base):
     """恢复操作记录"""
     __tablename__ = "restore_operations"
+
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     backup_id = Column(String(255), index=True)
@@ -147,6 +151,7 @@ class RestoreDrill(Base):
     """恢复演练记录"""
     __tablename__ = "restore_drills"
 
+
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     agent_id = Column(String(255), index=True)
     agent_name = Column(String(255))
@@ -165,6 +170,7 @@ class RestoreDrill(Base):
 class EncryptionKey(Base):
     """加密密钥元数据（密钥本体仅存于密钥库文件）"""
     __tablename__ = "encryption_keys"
+
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     key_id = Column(String(64), unique=True)

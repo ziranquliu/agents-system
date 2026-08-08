@@ -283,7 +283,10 @@ class AESGCMEncryptionService:
             aesgcm = AESGCM(key_info.key_material)
             # GCM: ciphertext + tag 拼接
             ct_with_tag = ciphertext + tag
-            plaintext = aesgcm.decrypt(nonce, ct_with_tag, aad_bytes)
+            try:
+                plaintext = aesgcm.decrypt(nonce, ct_with_tag, aad_bytes)
+            except Exception:
+                raise ValueError("认证标签验证失败 (数据被篡改)")
         else:
             # 降级: 验证 HMAC + XOR 解密
             expected_tag = hmac.new(

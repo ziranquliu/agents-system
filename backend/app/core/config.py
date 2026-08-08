@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     # Model Providers
     MODEL_PROVIDERS: List[str] = ["openai", "ollama", "openrouter"]
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @model_validator(mode="after")
     def _resolve_secret_key(self) -> "Settings":

@@ -58,7 +58,7 @@ services:
   # 数据库
   # ============================================================
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     container_name: agent-system-postgres
     restart: unless-stopped
     environment:
@@ -101,7 +101,7 @@ services:
   # 向量数据库
   # ============================================================
   qdrant:
-    image: qdrant/qdrant:v1.9
+    image: qdrant/qdrant:latest
     container_name: agent-system-qdrant
     restart: unless-stopped
     ports:
