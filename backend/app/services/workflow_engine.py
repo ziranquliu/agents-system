@@ -1,4 +1,5 @@
 ﻿# Auto-generated re-export stub for backward compatibility
 # Real implementation: app.services.platform.workflow_engine
-from app.services.platform.workflow_engine import *  # noqa: F401,F403
-
+import app.services.platform.workflow_engine as _impl
+import sys
+sys.modules[__name__].__dict__.update(vars(_impl))
